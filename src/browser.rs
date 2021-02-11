@@ -127,6 +127,9 @@ impl Launcher {
             BrowserType::Chromium if cfg!(windows) => {
                 Command::new(r#"C:\Program Files\Chromium\Application\chrome.exe"#)
             }
+            BrowserType::Chromium if cfg!(target_os = "macos") => {
+                Command::new("/Applications/Chromium.app/Contents/MacOS/Chromium")
+            }
             BrowserType::Chromium => Command::new("chromium"),
         };
         command
