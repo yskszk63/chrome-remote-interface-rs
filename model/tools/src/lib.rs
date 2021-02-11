@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 use std::fs::File;
-use std::path::Path;
 use std::io::Write;
+use std::path::Path;
 
 use anyhow::Context as _;
 use serde::Deserialize;

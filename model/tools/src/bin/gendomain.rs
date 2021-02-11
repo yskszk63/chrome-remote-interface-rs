@@ -1,5 +1,5 @@
-use std::io::stdout;
 use anyhow::Context;
+use std::io::stdout;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args();

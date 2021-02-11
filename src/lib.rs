@@ -57,26 +57,26 @@
 
 use std::collections::HashMap;
 use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll, Waker};
 use std::io;
 use std::ops::{Deref, DerefMut};
+use std::pin::Pin;
+use std::task::{Context, Poll, Waker};
 
+use bytes::{Buf, BytesMut};
 use futures::channel::mpsc;
 use futures::channel::oneshot;
-use futures::select;
 use futures::future::FutureExt;
-use futures::sink::{SinkExt, Sink};
-use futures::stream::{StreamExt, Stream, Fuse};
 use futures::ready;
+use futures::select;
+use futures::sink::{Sink, SinkExt};
+use futures::stream::{Fuse, Stream, StreamExt};
 use serde_json::Value;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::TcpStream;
+use tokio_pipe::{PipeRead, PipeWrite};
 use tokio_tungstenite::tungstenite::protocol::Message;
 use tokio_tungstenite::WebSocketStream;
-use tokio::net::TcpStream;
-use tokio::io::{AsyncWriteExt, AsyncBufReadExt, BufReader};
 use url::Url;
-use tokio_pipe::{PipeRead, PipeWrite};
-use bytes::{BytesMut, Buf};
 
 pub use browser::*;
 pub use chrome_remote_interface_model as model;
@@ -154,16 +154,18 @@ impl Stream for Channel {
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match self.get_mut() {
-            Self::Ws(ws) => {
-                loop {
-                    match ready!(ws.poll_next_unpin(cx)?) {
-                        Some(Message::Text(m)) => return Poll::Ready(Some(Ok(serde_json::from_str(&m)?))),
-                        Some(Message::Binary(m)) => return Poll::Ready(Some(Ok(serde_json::from_slice(&m)?))),
-                        Some(..) => {}
-                        None => return Poll::Ready(None),
+            Self::Ws(ws) => loop {
+                match ready!(ws.poll_next_unpin(cx)?) {
+                    Some(Message::Text(m)) => {
+                        return Poll::Ready(Some(Ok(serde_json::from_str(&m)?)))
                     }
+                    Some(Message::Binary(m)) => {
+                        return Poll::Ready(Some(Ok(serde_json::from_slice(&m)?)))
+                    }
+                    Some(..) => {}
+                    None => return Poll::Ready(None),
                 }
-            }
+            },
             Self::Pipe { pipeout, rbuf, .. } => {
                 let fut = pipeout.read_until(0, rbuf);
                 tokio::pin!(fut);
@@ -224,7 +226,12 @@ impl Sink<Value> for Channel {
                 Poll::Ready(Ok(()))
             }
 
-            Self::Pipe { wbuf, pipein, wakers, .. } => {
+            Self::Pipe {
+                wbuf,
+                pipein,
+                wakers,
+                ..
+            } => {
                 let fut = pipein.write_all(wbuf);
                 tokio::pin!(fut);
                 ready!(fut.poll(cx)?);
@@ -244,9 +251,7 @@ impl Sink<Value> for Channel {
                 Poll::Ready(Ok(()))
             }
 
-            this @ Self::Pipe {..} => {
-                Pin::new(this).poll_flush(cx)
-            }
+            this @ Self::Pipe { .. } => Pin::new(this).poll_flush(cx),
         }
     }
 }
@@ -283,7 +288,12 @@ impl CdpSession {
         let request = serde_json::to_value(&request)?;
         //println!(">> {}", request);
         let (tx, rx) = oneshot::channel();
-        self.control_tx.unbounded_send(Control::Request(self.session_id.clone(), id, request, tx))?;
+        self.control_tx.unbounded_send(Control::Request(
+            self.session_id.clone(),
+            id,
+            request,
+            tx,
+        ))?;
 
         match rx.await? {
             Ok(v) => Ok(serde_json::from_value(v)?),
@@ -294,21 +304,28 @@ impl CdpSession {
     /// Subscribe Chrome DevTools Protocol Event.
     pub fn events(&mut self) -> Result<CdpEvents> {
         let (tx, rx) = mpsc::unbounded();
-        self.control_tx.unbounded_send(Control::Subscribe(self.session_id.clone(), tx))?;
-        Ok(CdpEvents {
-            rx,
-        })
+        self.control_tx
+            .unbounded_send(Control::Subscribe(self.session_id.clone(), tx))?;
+        Ok(CdpEvents { rx })
     }
 }
 
 impl Drop for CdpSession {
     fn drop(&mut self) {
-        self.control_tx.unbounded_send(Control::Disconnect(self.session_id.clone())).ok();
+        self.control_tx
+            .unbounded_send(Control::Disconnect(self.session_id.clone()))
+            .ok();
     }
 }
 
-async fn r#loop(mut control_rx: mpsc::UnboundedReceiver<Control>, mut channel: Channel) -> Result<()> {
-    let mut waiters = HashMap::<(Option<SessionId>, u32), oneshot::Sender<std::result::Result<Value, Value>>>::new();
+async fn r#loop(
+    mut control_rx: mpsc::UnboundedReceiver<Control>,
+    mut channel: Channel,
+) -> Result<()> {
+    let mut waiters = HashMap::<
+        (Option<SessionId>, u32),
+        oneshot::Sender<std::result::Result<Value, Value>>,
+    >::new();
     let mut events = HashMap::<Option<SessionId>, Vec<mpsc::UnboundedSender<model::Event>>>::new();
 
     loop {
@@ -368,7 +385,12 @@ async fn r#loop(mut control_rx: mpsc::UnboundedReceiver<Control>, mut channel: C
 #[derive(Debug)]
 enum Control {
     Subscribe(Option<SessionId>, mpsc::UnboundedSender<model::Event>),
-    Request(Option<SessionId>, u32, Value, oneshot::Sender<std::result::Result<Value, Value>>),
+    Request(
+        Option<SessionId>,
+        u32,
+        Value,
+        oneshot::Sender<std::result::Result<Value, Value>>,
+    ),
     Disconnect(Option<SessionId>),
 }
 
@@ -423,13 +445,20 @@ impl CdpClient {
         Ok(Self::connect_internal(channel, browser).await)
     }
 
-    async fn connect_pipe(browser: Browser, pipein: PipeWrite, pipeout: PipeRead) -> Result<(Self, Loop)> {
+    async fn connect_pipe(
+        browser: Browser,
+        pipein: PipeWrite,
+        pipeout: PipeRead,
+    ) -> Result<(Self, Loop)> {
         let channel = Channel::new_pipe(pipein, pipeout);
         Ok(Self::connect_internal(channel, Some(browser)).await)
     }
 
     /// Construct session with target.
-    pub fn session<S: Deref<Target = model::target::SessionId>>(&mut self, session_id: S) -> CdpSession {
+    pub fn session<S: Deref<Target = model::target::SessionId>>(
+        &mut self,
+        session_id: S,
+    ) -> CdpSession {
         let session_id = Some(SessionId::from(session_id.as_ref()));
         CdpSession {
             session_id,
