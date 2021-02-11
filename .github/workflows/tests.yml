@@ -12,7 +12,7 @@ jobs:
           - nightly
         os:
           - ubuntu-latest
-          #- macos-latest
+          - macos-latest
           - windows-latest
     steps:
     - uses: actions/checkout@v2
@@ -36,9 +36,15 @@ jobs:
       shell: bash
       if: matrix.os == 'windows-latest'
 
+    - name: Install chromium (macos)
+      run: |
+        brew install --cask chromium
+      if: matrix.os == 'macos-latest'
+
     - name: Tests
       uses: actions-rs/cargo@v1
+      timeout-minutes: 5
       with:
         command: test
-        args: --no-fail-fast
+        args: --no-fail-fast -- --nocapture
 # vim: set ts=2 sts=2 sw=2:
