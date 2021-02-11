@@ -33,6 +33,7 @@ jobs:
     - name: Install chromium (Windows)
       run: |
         choco --no-progress install chromium
+      shell: bash
       if: matrix.os == 'windows-latest'
 
     - name: Tests
