@@ -1,0 +1,33 @@
+[package]
+name = "chrome-remote-interface-model-tools"
+version = "0.1.0"
+authors = ["yskszk63 <yskszk63@gmail.com>"]
+edition = "2018"
+default-run = "gendomain"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0"
+nix = "0.19"
+quote = "1.0"
+proc-macro2 = "1.0"
+heck = "0.3"
+serde_json = "1.0"
+reqwest = "0.11"
+pretty_assertions = "0.6"
+
+[dependencies.serde]
+version = "1.0"
+features = [
+    "derive",
+]
+
+[dependencies.tokio]
+version = "1.0"
+features = [
+    "rt",
+    "macros",
+    "process",
+    "io-std",
+]

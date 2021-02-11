@@ -1,0 +1,31 @@
+[package]
+name = "chrome-remote-interface-model"
+version = "0.1.0-alpha.1"
+authors = ["yskszk63 <yskszk63@gmail.com>"]
+edition = "2018"
+description = "Chrome DevTools Protocol message model."
+repository = "https://github.com/yskszk63/chrome-remote-interface-rs"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+keywords = ["chrome", "chromium", "headless", "chrome devtools protocol"]
+categories = ["api-bindings", "web-programming"]
+
+[dependencies]
+serde_json = "1.0"
+
+[dependencies.serde]
+version = "1.0"
+features = [
+    "derive",
+]
+
+[build-dependencies]
+anyhow = "1.0"
+
+[build-dependencies.chrome-remote-interface-model-tools]
+version = "0.1"
+path = "tools"
+
+[features]
+default = []
+experimental = []
