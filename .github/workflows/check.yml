@@ -45,6 +45,9 @@ jobs:
         components: rustfmt, llvm-tools-preview
 
     - name: Tests
+      run: rustfmt -V
+
+    - name: Tests
       uses: actions-rs/cargo@v1
       with:
         command: test
