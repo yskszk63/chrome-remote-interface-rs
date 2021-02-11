@@ -60,8 +60,11 @@ use std::future::Future;
 use std::io;
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
-use std::task::{Context, Poll, Waker};
+#[cfg(unix)]
+use std::task::Waker;
+use std::task::{Context, Poll};
 
+#[cfg(unix)]
 use bytes::{Buf, BytesMut};
 use futures::channel::mpsc;
 use futures::channel::oneshot;
@@ -71,8 +74,10 @@ use futures::select;
 use futures::sink::{Sink, SinkExt};
 use futures::stream::{Fuse, Stream, StreamExt};
 use serde_json::Value;
+#[cfg(unix)]
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
+#[cfg(unix)]
 use tokio_pipe::{PipeRead, PipeWrite};
 use tokio_tungstenite::tungstenite::protocol::Message;
 use tokio_tungstenite::WebSocketStream;
@@ -128,6 +133,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 enum Channel {
     Ws(Fuse<WebSocketStream<TcpStream>>),
+    #[cfg(unix)]
     Pipe {
         pipein: PipeWrite,
         pipeout: BufReader<PipeRead>,
@@ -137,6 +143,7 @@ enum Channel {
     },
 }
 
+#[cfg(unix)]
 impl Channel {
     fn new_pipe(pipein: PipeWrite, pipeout: PipeRead) -> Self {
         Channel::Pipe {
@@ -166,6 +173,8 @@ impl Stream for Channel {
                     None => return Poll::Ready(None),
                 }
             },
+
+            #[cfg(unix)]
             Self::Pipe { pipeout, rbuf, .. } => {
                 let fut = pipeout.read_until(0, rbuf);
                 tokio::pin!(fut);
@@ -191,6 +200,7 @@ impl Sink<Value> for Channel {
                 Poll::Ready(Ok(()))
             }
 
+            #[cfg(unix)]
             Self::Pipe { wbuf, wakers, .. } => {
                 if wbuf.has_remaining() {
                     let waker = cx.waker().clone();
@@ -211,6 +221,7 @@ impl Sink<Value> for Channel {
                 Ok(())
             }
 
+            #[cfg(unix)]
             Self::Pipe { wbuf, .. } => {
                 wbuf.extend_from_slice(&serde_json::to_vec(&item)?);
                 wbuf.extend_from_slice(&[0]);
@@ -226,6 +237,7 @@ impl Sink<Value> for Channel {
                 Poll::Ready(Ok(()))
             }
 
+            #[cfg(unix)]
             Self::Pipe {
                 wbuf,
                 pipein,
@@ -251,6 +263,7 @@ impl Sink<Value> for Channel {
                 Poll::Ready(Ok(()))
             }
 
+            #[cfg(unix)]
             this @ Self::Pipe { .. } => Pin::new(this).poll_flush(cx),
         }
     }
@@ -286,7 +299,6 @@ impl CdpSession {
         let id = 0; // TODO increment
         let request = command.into_request(self.session_id.clone(), id);
         let request = serde_json::to_value(&request)?;
-        //println!(">> {}", request);
         let (tx, rx) = oneshot::channel();
         self.control_tx.unbounded_send(Control::Request(
             self.session_id.clone(),
@@ -445,6 +457,7 @@ impl CdpClient {
         Ok(Self::connect_internal(channel, browser).await)
     }
 
+    #[cfg(unix)]
     async fn connect_pipe(
         browser: Browser,
         pipein: PipeWrite,
