@@ -60,8 +60,11 @@ use std::future::Future;
 use std::io;
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
-use std::task::{Context, Poll, Waker};
+#[cfg(unix)]
+use std::task::Waker;
+use std::task::{Context, Poll};
 
+#[cfg(unix)]
 use bytes::{Buf, BytesMut};
 use futures::channel::mpsc;
 use futures::channel::oneshot;
@@ -71,6 +74,7 @@ use futures::select;
 use futures::sink::{Sink, SinkExt};
 use futures::stream::{Fuse, Stream, StreamExt};
 use serde_json::Value;
+#[cfg(unix)]
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 #[cfg(unix)]

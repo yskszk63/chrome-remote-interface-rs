@@ -297,6 +297,7 @@ impl Browser {
     /// Connect Chrome DevTools Protocol Client.
     ///
     /// This instance Ownership move to Client.
+    #[allow(unused_mut)]
     pub async fn connect(mut self) -> super::Result<(super::CdpClient, super::Loop)> {
         #[cfg(unix)]
         {
