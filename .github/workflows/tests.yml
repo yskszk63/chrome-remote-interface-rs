@@ -13,7 +13,7 @@ jobs:
         os:
           - ubuntu-latest
           #- macos-latest
-          #- windows-latest
+          - windows-latest
     steps:
     - uses: actions/checkout@v2
 
@@ -24,10 +24,16 @@ jobs:
         profile: minimal
         components: rustfmt
 
-    - name: Install chromium
+    - name: Install chromium (Ubuntu)
       run: |
         sudo apt update
         sudo apt install chromium-browser
+      if: matrix.os == 'ubuntu-latest'
+
+    - name: Install chromium (Windows)
+      run: |
+        choco install chromium
+      if: matrix.os == 'windows-latest'
 
     - name: Tests
       uses: actions-rs/cargo@v1
