@@ -5,6 +5,7 @@ authors = ["yskszk63 <yskszk63@gmail.com>"]
 edition = "2018"
 default-run = "gendomain"
 description = "dev tools for chrome-remote-interface-model"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 anyhow = "1.0"
