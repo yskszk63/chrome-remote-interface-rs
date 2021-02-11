@@ -2,7 +2,7 @@ use futures::stream::StreamExt;
 
 use chrome_remote_interface::model::page::{self, CaptureScreenshotCommand, NavigateCommand};
 use chrome_remote_interface::model::runtime::EvaluateCommand;
-use chrome_remote_interface::model::target::{CreateTargetCommand, AttachToTargetCommand};
+use chrome_remote_interface::model::target::{AttachToTargetCommand, CreateTargetCommand};
 use chrome_remote_interface::model::Event;
 
 use chrome_remote_interface::Browser;
@@ -11,10 +11,7 @@ use chrome_remote_interface::Browser;
 async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init();
 
-    let browser = Browser::launcher()
-        .headless(true)
-        .launch()
-        .await?;
+    let browser = Browser::launcher().headless(true).launch().await?;
 
     let (mut client, task) = browser.connect().await?;
     tokio::spawn(task);
@@ -51,9 +48,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut events = session.events()?;
 
-    let response = session
-        .request(page::EnableCommand::new())
-        .await?;
+    let response = session.request(page::EnableCommand::new()).await?;
     println!("{:?}", response);
 
     while let Some(evt) = events.next().await {

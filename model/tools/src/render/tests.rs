@@ -1,8 +1,8 @@
-use std::process::{Command as StdCommand, Stdio};
-use std::io::Write;
-use std::io::Read;
 use super::*;
 use pretty_assertions::assert_eq;
+use std::io::Read;
+use std::io::Write;
+use std::process::{Command as StdCommand, Stdio};
 
 fn rustfmt(prog: &TokenStream) -> String {
     let mut proc = StdCommand::new("rustfmt")
@@ -181,7 +181,9 @@ fn test_event() {
         name: "Evt".to_string(),
         parameters: Default::default(),
     };
-    let prog = Context::new_root(&Default::default()).with_domain("foo").render_with(&event);
+    let prog = Context::new_root(&Default::default())
+        .with_domain("foo")
+        .render_with(&event);
     let expect = quote! {
         #[derive(Debug, Clone, Default, Serialize, Deserialize)]
         pub struct EvtEvent {}
@@ -204,7 +206,9 @@ fn test_command() {
         redirect: None,
         returns: Default::default(),
     };
-    let prog = Context::new_root(&Default::default()).with_domain("foo").render_with(&command);
+    let prog = Context::new_root(&Default::default())
+        .with_domain("foo")
+        .render_with(&command);
     let expect = quote! {
         #[derive(Debug, Clone, Default, Serialize, Deserialize)]
         pub struct CmdCommand {}
@@ -236,7 +240,9 @@ fn test_domain_type_string() {
         id: "ty".to_string(),
         r#type: Type::String,
     };
-    let prog = Context::new_root(&Default::default()).with_domain("foo").render_with(&ty);
+    let prog = Context::new_root(&Default::default())
+        .with_domain("foo")
+        .render_with(&ty);
     let expect = quote! {
         #[derive(Debug, Clone, Serialize, Deserialize)]
         pub struct Ty(String);
@@ -267,7 +273,9 @@ fn test_domain_type_integer() {
         id: "ty".to_string(),
         r#type: Type::Integer,
     };
-    let prog = Context::new_root(&Default::default()).with_domain("foo").render_with(&ty);
+    let prog = Context::new_root(&Default::default())
+        .with_domain("foo")
+        .render_with(&ty);
     let expect = quote! {
         #[derive(Debug, Clone, Serialize, Deserialize)]
         pub struct Ty(u32);
@@ -293,7 +301,9 @@ fn test_domain_type_number() {
         id: "ty".to_string(),
         r#type: Type::Number,
     };
-    let prog = Context::new_root(&Default::default()).with_domain("foo").render_with(&ty);
+    let prog = Context::new_root(&Default::default())
+        .with_domain("foo")
+        .render_with(&ty);
     let expect = quote! {
         #[derive(Debug, Clone, Serialize, Deserialize)]
         pub struct Ty(f64);
@@ -347,7 +357,9 @@ fn test_domain_type_array() {
         id: "ty".to_string(),
         r#type: Type::Array(Box::new(Type::String)),
     };
-    let prog = Context::new_root(&Default::default()).with_domain("foo").render_with(&ty);
+    let prog = Context::new_root(&Default::default())
+        .with_domain("foo")
+        .render_with(&ty);
     let expect = quote! {
         #[derive(Debug, Clone, Serialize, Deserialize)]
         pub struct Ty(Vec<String>);
@@ -367,7 +379,9 @@ fn test_domain_type_enum() {
         id: "ty".to_string(),
         r#type: Type::EnumString(vec!["bar".into()]),
     };
-    let prog = Context::new_root(&Default::default()).with_domain("foo").render_with(&ty);
+    let prog = Context::new_root(&Default::default())
+        .with_domain("foo")
+        .render_with(&ty);
     let expect = quote! {
         #[derive(Debug, Clone, Serialize, Deserialize)]
         pub enum Ty {
@@ -432,7 +446,9 @@ fn test_domain_type_object() {
             },
         ]),
     };
-    let prog = Context::new_root(&Default::default()).with_domain("foo").render_with(&ty);
+    let prog = Context::new_root(&Default::default())
+        .with_domain("foo")
+        .render_with(&ty);
     let expect = quote! {
         #[derive(Debug, Clone, Serialize, Deserialize)]
         pub enum TyEnum {
@@ -586,15 +602,15 @@ fn test_domain_type_object_object() {
     let ty = DomainType {
         annotation: Default::default(),
         id: "ty".to_string(),
-        r#type: Type::Object(vec![
-            Property {
-                annotation: Default::default(),
-                name: "object".into(),
-                r#type: Type::Object(vec![]),
-            },
-        ]),
+        r#type: Type::Object(vec![Property {
+            annotation: Default::default(),
+            name: "object".into(),
+            r#type: Type::Object(vec![]),
+        }]),
     };
-    let prog = Context::new_root(&Default::default()).with_domain("foo").render_with(&ty);
+    let prog = Context::new_root(&Default::default())
+        .with_domain("foo")
+        .render_with(&ty);
     let expect = quote! {
         #[derive(Debug, Clone, Default, Serialize, Deserialize)]
         pub struct TyObject {}
@@ -682,7 +698,9 @@ fn test_domain_type_object_option() {
             },
         ]),
     };
-    let prog = Context::new_root(&Default::default()).with_domain("foo").render_with(&ty);
+    let prog = Context::new_root(&Default::default())
+        .with_domain("foo")
+        .render_with(&ty);
     let expect = quote! {
         #[derive(Debug, Clone, Serialize, Deserialize)]
         pub enum TyEnum {
@@ -845,15 +863,15 @@ fn test_domain_type_object_option_object() {
     let ty = DomainType {
         annotation: Default::default(),
         id: "ty".to_string(),
-        r#type: Type::Object(vec![
-            Property {
-                annotation: Default::default(),
-                name: "object".into(),
-                r#type: Type::Option(Box::new(Type::Object(vec![]))),
-            },
-        ]),
+        r#type: Type::Object(vec![Property {
+            annotation: Default::default(),
+            name: "object".into(),
+            r#type: Type::Option(Box::new(Type::Object(vec![]))),
+        }]),
     };
-    let prog = Context::new_root(&Default::default()).with_domain("foo").render_with(&ty);
+    let prog = Context::new_root(&Default::default())
+        .with_domain("foo")
+        .render_with(&ty);
     let expect = quote! {
         #[derive(Debug, Clone, Default, Serialize, Deserialize)]
         pub struct TyObject {}
@@ -895,15 +913,15 @@ fn test_domain_type_object_array_object() {
     let ty = DomainType {
         annotation: Default::default(),
         id: "ty".to_string(),
-        r#type: Type::Object(vec![
-            Property {
-                annotation: Default::default(),
-                name: "object".into(),
-                r#type: Type::Array(Box::new(Type::Object(vec![]))),
-            },
-        ]),
+        r#type: Type::Object(vec![Property {
+            annotation: Default::default(),
+            name: "object".into(),
+            r#type: Type::Array(Box::new(Type::Object(vec![]))),
+        }]),
     };
-    let prog = Context::new_root(&Default::default()).with_domain("foo").render_with(&ty);
+    let prog = Context::new_root(&Default::default())
+        .with_domain("foo")
+        .render_with(&ty);
     let expect = quote! {
         #[derive(Debug, Clone, Default, Serialize, Deserialize)]
         pub struct TyObject {}

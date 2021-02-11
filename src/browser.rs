@@ -264,7 +264,8 @@ impl Browser {
                         let maybe_port = f.next_line().await?;
                         let maybe_path = f.next_line().await?;
                         let maybe_eof = f.next_line().await?;
-                        if let (Some(port), Some(path), None) = (maybe_port, maybe_path, maybe_eof) {
+                        if let (Some(port), Some(path), None) = (maybe_port, maybe_path, maybe_eof)
+                        {
                             return Ok(Url::parse(&format!("ws://127.0.0.1:{}{}", port, path))?);
                         } else {
                             return Err(BrowserError::UnexpectedFormat);

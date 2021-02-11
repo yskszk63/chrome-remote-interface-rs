@@ -567,7 +567,8 @@ where
             let field_decl = field.render_field_declaration(cx);
             let getter = field.render_getter(cx);
 
-            let nestedty = NestedType::new_with_suffix(field.r#type(), &field.name().to_camel_case());
+            let nestedty =
+                NestedType::new_with_suffix(field.r#type(), &field.name().to_camel_case());
             let nestedty = cx.render_with(&nestedty);
 
             let field_ident = field.ident();
@@ -625,15 +626,25 @@ where
             let nestedtys = nestedtys.render(cx); // FIXME
 
             let field_idents = fields.iter().map(|field| field.ident()).collect::<Vec<_>>();
-            let field_bare_tys = fields.iter().map(|field| field.nested_type().ty(&field.nested_type().enter(cx))).collect::<Vec<_>>();
-            let field_metas = fields.iter().map(|field| field.meta_for_trait_impl()).collect::<Vec<_>>();
-            let assigns = fields.iter().map(|field| {
-                let field_ident = field.ident();
-                if field.need_box() {
-                    quote! { #field_ident: Box::new(#field_ident) }
-                } else {
-                    quote! { #field_ident }
-            }}).collect::<Vec<_>>();
+            let field_bare_tys = fields
+                .iter()
+                .map(|field| field.nested_type().ty(&field.nested_type().enter(cx)))
+                .collect::<Vec<_>>();
+            let field_metas = fields
+                .iter()
+                .map(|field| field.meta_for_trait_impl())
+                .collect::<Vec<_>>();
+            let assigns = fields
+                .iter()
+                .map(|field| {
+                    let field_ident = field.ident();
+                    if field.need_box() {
+                        quote! { #field_ident: Box::new(#field_ident) }
+                    } else {
+                        quote! { #field_ident }
+                    }
+                })
+                .collect::<Vec<_>>();
 
             quote! {
                 #nestedtys
