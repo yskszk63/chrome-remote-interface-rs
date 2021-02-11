@@ -338,7 +338,8 @@ impl Browser {
 
 impl Drop for Browser {
     fn drop(&mut self) {
-        if let Some(proc) = self.proc.take() {
+        #[allow(unused_mut)]
+        if let Some(mut proc) = self.proc.take() {
             #[cfg(unix)]
             {
                 use nix::sys::signal::{kill, SIGTERM};
