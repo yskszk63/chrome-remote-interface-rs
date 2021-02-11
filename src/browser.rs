@@ -124,6 +124,7 @@ impl Launcher {
             .to_owned()
             .unwrap_or(BrowserType::Chromium);
         let mut command = match &browser_type {
+            BrowserType::Chromium if cfg!(windows) => Command::new(r#"C:\Program Files\Chromium\Application\chrome.exe"#),
             BrowserType::Chromium => Command::new("chromium"),
         };
         command
