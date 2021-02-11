@@ -23,7 +23,7 @@ features = [
 anyhow = "1.0"
 
 [build-dependencies.chrome-remote-interface-model-tools]
-version = "0.1"
+version = "0.1.0-alpha.1"
 path = "tools"
 
 [features]

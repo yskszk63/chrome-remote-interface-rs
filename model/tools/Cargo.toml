@@ -1,11 +1,10 @@
 [package]
 name = "chrome-remote-interface-model-tools"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 authors = ["yskszk63 <yskszk63@gmail.com>"]
 edition = "2018"
 default-run = "gendomain"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "dev tools for chrome-remote-interface-model"
 
 [dependencies]
 anyhow = "1.0"
