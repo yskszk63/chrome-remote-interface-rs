@@ -97,7 +97,8 @@ impl Launcher {
         self
     }
 
-    /// Specify protocol transport using pipe or not (websocket). (Default: pipe)
+    /// Specify protocol transport using pipe or not (websocket). (Default: Windows/Mac: false,
+    /// Other: true)
     pub fn use_pipe(&mut self, value: bool) -> &mut Self {
         // FIXME not supported for Windows
         self.use_pipe = Some(value);
@@ -178,7 +179,10 @@ impl Launcher {
             "--use-mock-keychain",
         ]);
 
-        let remote_debugging = if self.use_pipe.unwrap_or(cfg!(unix)) {
+        let remote_debugging = if self
+            .use_pipe
+            .unwrap_or(cfg!(unix) && !cfg!(target_os = "macos"))
+        {
             #[cfg(unix)]
             {
                 use nix::fcntl::{fcntl, FcntlArg, OFlag};
