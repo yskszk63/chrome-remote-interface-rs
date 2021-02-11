@@ -1048,6 +1048,7 @@ mod protocol {
             #![allow(deprecated)]
             #![allow(clippy::many_single_char_names)]
             #![allow(clippy::new_without_default)]
+            #![allow(clippy::wrong_self_convention)]
 
             use std::iter::{IntoIterator, FromIterator};
             use std::ops::Deref;
