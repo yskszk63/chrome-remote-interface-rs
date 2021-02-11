@@ -43,7 +43,8 @@ jobs:
 
     - name: Tests
       uses: actions-rs/cargo@v1
+      timeout-minutes: 5
       with:
         command: test
-        args: --no-fail-fast
+        args: --no-fail-fast -- --nocapture
 # vim: set ts=2 sts=2 sw=2:
