@@ -92,7 +92,7 @@ impl TryFrom<RawType> for Type {
                 Type::Object(properties.unwrap_or_default())
             }
             (Some("array"), None, None, None, Some(items)) => Type::Array(Box::new(items)),
-            (t, r, e, p, i) => anyhow::bail!("{:?} {:?} {:?} {:?} {:?}", t, r, e, p, i),
+            other => anyhow::bail!("{:?}", other),
         };
         if optional.unwrap_or_default() {
             Ok(Self::Option(Box::new(result)))
