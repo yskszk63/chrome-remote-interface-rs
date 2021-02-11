@@ -1,4 +1,5 @@
 use std::io;
+#[cfg(unix)]
 use std::os::unix::io::IntoRawFd;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -9,6 +10,7 @@ use tokio::fs::File;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::time::sleep;
+#[cfg(unix)]
 use tokio_pipe::{PipeRead, PipeWrite};
 use url::Url;
 
@@ -56,6 +58,7 @@ pub enum BrowserType {
 
 #[derive(Debug)]
 enum RemoteDebugging {
+    #[cfg(unix)]
     Pipe(Option<(PipeWrite, PipeRead)>),
     Ws,
 }
@@ -169,45 +172,52 @@ impl Launcher {
             "--use-mock-keychain",
         ]);
 
-        let remote_debugging = if self.use_pipe.unwrap_or(true) {
-            use nix::fcntl::{fcntl, FcntlArg, OFlag};
-            use nix::unistd::{close, dup, dup2};
+        let remote_debugging = if self.use_pipe.unwrap_or(cfg!(unix)) {
+            #[cfg(unix)]
+            {
+                use nix::fcntl::{fcntl, FcntlArg, OFlag};
+                use nix::unistd::{close, dup, dup2};
 
-            command.arg("--remote-debugging-pipe");
-            let (pipein_rx, pipein) = tokio_pipe::pipe()?;
-            let (pipeout, pipeout_tx) = tokio_pipe::pipe()?;
-            let pipein_rx = pipein_rx.into_raw_fd();
-            let pipeout_tx = pipeout_tx.into_raw_fd();
+                command.arg("--remote-debugging-pipe");
+                let (pipein_rx, pipein) = tokio_pipe::pipe()?;
+                let (pipeout, pipeout_tx) = tokio_pipe::pipe()?;
+                let pipein_rx = pipein_rx.into_raw_fd();
+                let pipeout_tx = pipeout_tx.into_raw_fd();
 
-            let flag = fcntl(pipein_rx, FcntlArg::F_GETFL)
-                .map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-            fcntl(
-                pipein_rx,
-                FcntlArg::F_SETFL(OFlag::from_bits_truncate(flag) ^ OFlag::O_NONBLOCK),
-            )
-            .map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-            let flag = fcntl(pipeout_tx, FcntlArg::F_GETFL)
-                .map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-            fcntl(
-                pipeout_tx,
-                FcntlArg::F_SETFL(OFlag::from_bits_truncate(flag) ^ OFlag::O_NONBLOCK),
-            )
-            .map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
+                let flag = fcntl(pipein_rx, FcntlArg::F_GETFL)
+                    .map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
+                fcntl(
+                    pipein_rx,
+                    FcntlArg::F_SETFL(OFlag::from_bits_truncate(flag) ^ OFlag::O_NONBLOCK),
+                )
+                    .map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
+                let flag = fcntl(pipeout_tx, FcntlArg::F_GETFL)
+                    .map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
+                fcntl(
+                    pipeout_tx,
+                    FcntlArg::F_SETFL(OFlag::from_bits_truncate(flag) ^ OFlag::O_NONBLOCK),
+                )
+                    .map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
 
-            unsafe {
-                command.pre_exec(move || {
-                    let pipein2 =
-                        dup(pipein_rx).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-                    let pipeout2 =
-                        dup(pipeout_tx).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-                    dup2(pipein2, 3).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-                    dup2(pipeout2, 4).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-                    close(pipein2).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-                    close(pipeout2).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-                    Ok(())
-                });
+                unsafe {
+                    command.pre_exec(move || {
+                        let pipein2 =
+                            dup(pipein_rx).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
+                        let pipeout2 =
+                            dup(pipeout_tx).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
+                        dup2(pipein2, 3).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
+                        dup2(pipeout2, 4).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
+                        close(pipein2).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
+                        close(pipeout2).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
+                        Ok(())
+                    });
+                }
+                RemoteDebugging::Pipe(Some((pipein, pipeout)))
             }
-            RemoteDebugging::Pipe(Some((pipein, pipeout)))
+            #[cfg(not(unix))]
+            {
+                unimplemented!()
+            }
         } else {
             command.arg("--remote-debugging-port=0");
             RemoteDebugging::Ws
@@ -285,13 +295,20 @@ impl Browser {
     ///
     /// This instance Ownership move to Client.
     pub async fn connect(mut self) -> super::Result<(super::CdpClient, super::Loop)> {
-        let maybe_pipeio = match &mut self.remote_debugging {
-            RemoteDebugging::Ws => None,
-            RemoteDebugging::Pipe(pipeio) => Some(pipeio.take().unwrap()),
-        };
-        match maybe_pipeio {
-            None => super::CdpClient::connect_ws(&self.cdp_url().await?, Some(self)).await,
-            Some((pipein, pipeout)) => super::CdpClient::connect_pipe(self, pipein, pipeout).await,
+        #[cfg(unix)]
+        {
+            let maybe_pipeio = match &mut self.remote_debugging {
+                RemoteDebugging::Ws => None,
+                RemoteDebugging::Pipe(pipeio) => Some(pipeio.take().unwrap()),
+            };
+            match maybe_pipeio {
+                None => super::CdpClient::connect_ws(&self.cdp_url().await?, Some(self)).await,
+                Some((pipein, pipeout)) => super::CdpClient::connect_pipe(self, pipein, pipeout).await,
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            super::CdpClient::connect_ws(&self.cdp_url().await?, Some(self)).await
         }
     }
 }
@@ -299,36 +316,46 @@ impl Browser {
 impl Browser {
     /// Close browser.
     pub async fn close(&mut self) {
-        /// FIXME Windows not supported.
-        use nix::sys::signal::{kill, SIGTERM};
-        use nix::unistd::Pid;
-
         if let Some(mut proc) = self.proc.take() {
-            if let Some(pid) = proc.id() {
-                let pid = Pid::from_raw(pid as i32);
-                kill(pid, Some(SIGTERM)).ok(); // FIXME
-                proc.wait().await.ok();
+            #[cfg(unix)]
+            {
+                use nix::sys::signal::{kill, SIGTERM};
+                use nix::unistd::Pid;
+                if let Some(pid) = proc.id() {
+                    let pid = Pid::from_raw(pid as i32);
+                    kill(pid, Some(SIGTERM)).ok(); // FIXME
+                    proc.wait().await.ok();
+                }
             }
-            self.user_data_dir.take();
-            //std::mem::forget(self.user_data_dir.take());
+            #[cfg(not(unix))]
+            {
+                proc.kill().await.ok();
+            }
         }
+        self.user_data_dir.take();
     }
 }
 
 impl Drop for Browser {
     fn drop(&mut self) {
-        use nix::sys::signal::{kill, SIGTERM};
-        use nix::sys::wait::waitpid;
-        use nix::unistd::Pid;
-
         if let Some(proc) = self.proc.take() {
-            if let Some(pid) = proc.id() {
-                let pid = Pid::from_raw(pid as i32);
-                kill(pid, Some(SIGTERM)).ok(); // FIXME
-                waitpid(Some(pid), None).ok(); // FIXME blocking
+            #[cfg(unix)]
+            {
+                use nix::sys::signal::{kill, SIGTERM};
+                use nix::sys::wait::waitpid;
+                use nix::unistd::Pid;
+
+                if let Some(pid) = proc.id() {
+                    let pid = Pid::from_raw(pid as i32);
+                    kill(pid, Some(SIGTERM)).ok(); // FIXME
+                    waitpid(Some(pid), None).ok(); // FIXME blocking
+                }
             }
-            self.user_data_dir.take();
-            //std::mem::forget(self.user_data_dir.take());
+            #[cfg(not(unix))]
+            {
+                proc.start_kill().ok();
+            }
         }
+        self.user_data_dir.take();
     }
 }
