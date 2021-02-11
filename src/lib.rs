@@ -73,6 +73,7 @@ use futures::stream::{Fuse, Stream, StreamExt};
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
+#[cfg(unix)]
 use tokio_pipe::{PipeRead, PipeWrite};
 use tokio_tungstenite::tungstenite::protocol::Message;
 use tokio_tungstenite::WebSocketStream;
