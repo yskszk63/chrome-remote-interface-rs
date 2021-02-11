@@ -124,7 +124,9 @@ impl Launcher {
             .to_owned()
             .unwrap_or(BrowserType::Chromium);
         let mut command = match &browser_type {
-            BrowserType::Chromium if cfg!(windows) => Command::new(r#"C:\Program Files\Chromium\Application\chrome.exe"#),
+            BrowserType::Chromium if cfg!(windows) => {
+                Command::new(r#"C:\Program Files\Chromium\Application\chrome.exe"#)
+            }
             BrowserType::Chromium => Command::new("chromium"),
         };
         command
@@ -191,14 +193,14 @@ impl Launcher {
                     pipein_rx,
                     FcntlArg::F_SETFL(OFlag::from_bits_truncate(flag) ^ OFlag::O_NONBLOCK),
                 )
-                    .map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
+                .map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
                 let flag = fcntl(pipeout_tx, FcntlArg::F_GETFL)
                     .map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
                 fcntl(
                     pipeout_tx,
                     FcntlArg::F_SETFL(OFlag::from_bits_truncate(flag) ^ OFlag::O_NONBLOCK),
                 )
-                    .map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
+                .map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
 
                 unsafe {
                     command.pre_exec(move || {
@@ -304,7 +306,9 @@ impl Browser {
             };
             match maybe_pipeio {
                 None => super::CdpClient::connect_ws(&self.cdp_url().await?, Some(self)).await,
-                Some((pipein, pipeout)) => super::CdpClient::connect_pipe(self, pipein, pipeout).await,
+                Some((pipein, pipeout)) => {
+                    super::CdpClient::connect_pipe(self, pipein, pipeout).await
+                }
             }
         }
         #[cfg(not(unix))]
