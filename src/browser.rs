@@ -100,7 +100,6 @@ impl Launcher {
     /// Specify protocol transport using pipe or not (websocket). (Default: Windows/Mac: false,
     /// Other: true)
     pub fn use_pipe(&mut self, value: bool) -> &mut Self {
-        // FIXME not supported for Windows
         self.use_pipe = Some(value);
         self
     }
