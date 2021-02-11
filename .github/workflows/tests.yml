@@ -34,7 +34,9 @@ jobs:
       run: |
         choco install --no-progress chromium
         ls 'C:\Program Files\Chromium\Application'
-        chromium --version
+        'C:\Program Files\Chromium\Application\chrome.exe' --version
+        echo 'C:\Program Files\Chromium\Application' >> $GITHUB_PATH
+        #chromium --version
       shell: bash
       if: matrix.os == 'windows-latest'
 
