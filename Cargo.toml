@@ -7,7 +7,7 @@ description = "Chrome DevTools Protocol Client."
 repository = "https://github.com/yskszk63/chrome-remote-interface-rs"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
-keywords = ["chrome", "chromium", "headless", "chrome devtools protocol"]
+keywords = ["chrome", "chromium", "headless", "cdp"]
 categories = ["api-bindings", "web-programming"]
 
 [dependencies]
