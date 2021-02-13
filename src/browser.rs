@@ -70,6 +70,7 @@ pub struct Launcher {
     user_data_dir: Option<UserDataDir>,
     headless: Option<bool>,
     use_pipe: Option<bool>,
+    output: Option<bool>,
 }
 
 impl Launcher {
@@ -104,6 +105,12 @@ impl Launcher {
         self
     }
 
+    /// Whether or not browser process stdout / stderr. (Default: false)
+    pub fn output(&mut self, value: bool) -> &mut Self {
+        self.output = Some(value);
+        self
+    }
+
     /// Launching browser.
     pub async fn launch(&mut self) -> Result<Browser> {
         let now = SystemTime::now();
@@ -132,10 +139,14 @@ impl Launcher {
             }
             BrowserType::Chromium => Command::new("chromium"),
         };
-        command
-            .stdin(Stdio::null())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit());
+
+        command.stdin(Stdio::null());
+        if self.output.unwrap_or(false) {
+            command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
+        } else {
+            command.stdout(Stdio::null()).stderr(Stdio::null());
+        }
+
         if headless {
             command.args(&["--headless", "--disable-gpu"]);
         }
