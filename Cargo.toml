@@ -1,6 +1,6 @@
 [package]
 name = "chrome-remote-interface"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 authors = ["yskszk63 <yskszk63@gmail.com>"]
 edition = "2018"
 description = "Chrome DevTools Protocol Client."
