@@ -45,6 +45,7 @@ async fn main() -> anyhow::Result<()> {
             println!("{:?}", evt);
         }
     });
+    drop(client);
 
     let mut events = session.events()?;
 

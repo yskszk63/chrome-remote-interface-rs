@@ -67,3 +67,7 @@ members = [
     "model",
     "model/tools",
 ]
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-apple-darwin", "x86_64-pc-windows-msvc"]
