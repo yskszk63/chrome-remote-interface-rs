@@ -60,6 +60,7 @@ use std::future::Future;
 use std::io;
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
+use std::sync::Arc;
 #[cfg(unix)]
 use std::task::Waker;
 use std::task::{Context, Poll};
@@ -288,6 +289,7 @@ impl Stream for CdpEvents {
 pub struct CdpSession {
     session_id: Option<SessionId>,
     control_tx: mpsc::UnboundedSender<Control>,
+    browser: Option<Arc<Browser>>,
 }
 
 impl CdpSession {
@@ -424,7 +426,6 @@ impl Future for Loop {
 #[derive(Debug)]
 pub struct CdpClient {
     control_tx: mpsc::UnboundedSender<Control>,
-    browser: Option<Browser>,
     session: CdpSession,
 }
 
@@ -434,13 +435,14 @@ impl CdpClient {
         let task = Loop {
             future: Box::pin(r#loop(control_rx, channel)),
         };
+        let browser = browser.map(Arc::new);
         let session = CdpSession {
             session_id: None,
             control_tx: control_tx.clone(),
+            browser,
         };
         let client = CdpClient {
             control_tx,
-            browser,
             session,
         };
         (client, task)
@@ -476,6 +478,7 @@ impl CdpClient {
         CdpSession {
             session_id,
             control_tx: self.control_tx.clone(),
+            browser: self.browser.clone(),
         }
     }
 }
