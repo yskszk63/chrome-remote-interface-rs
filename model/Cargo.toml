@@ -29,3 +29,7 @@ path = "tools"
 [features]
 default = []
 experimental = []
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-apple-darwin", "x86_64-pc-windows-msvc"]
