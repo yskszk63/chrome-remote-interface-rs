@@ -60,6 +60,7 @@ use std::future::Future;
 use std::io;
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 #[cfg(unix)]
 use std::task::Waker;
@@ -287,6 +288,7 @@ impl Stream for CdpEvents {
 /// Chrome DevTools Protocol Session.
 #[derive(Debug, Clone)]
 pub struct CdpSession {
+    idgen: Arc<AtomicU32>,
     session_id: Option<SessionId>,
     control_tx: mpsc::UnboundedSender<Control>,
     browser: Option<Arc<Browser>>,
@@ -298,16 +300,12 @@ impl CdpSession {
     where
         C: model::Command,
     {
-        let id = 0; // TODO increment
+        let id = self.idgen.fetch_add(1, Ordering::SeqCst);
         let request = command.into_request(self.session_id.clone(), id);
         let request = serde_json::to_value(&request)?;
         let (tx, rx) = oneshot::channel();
-        self.control_tx.unbounded_send(Control::Request(
-            self.session_id.clone(),
-            id,
-            request,
-            tx,
-        ))?;
+        self.control_tx
+            .unbounded_send(Control::Request(id, request, tx))?;
 
         match rx.await? {
             Ok(v) => Ok(serde_json::from_value(v)?),
@@ -324,22 +322,11 @@ impl CdpSession {
     }
 }
 
-impl Drop for CdpSession {
-    fn drop(&mut self) {
-        self.control_tx
-            .unbounded_send(Control::Disconnect(self.session_id.clone()))
-            .ok();
-    }
-}
-
 async fn r#loop(
     mut control_rx: mpsc::UnboundedReceiver<Control>,
     mut channel: Channel,
 ) -> Result<()> {
-    let mut waiters = HashMap::<
-        (Option<SessionId>, u32),
-        oneshot::Sender<std::result::Result<Value, Value>>,
-    >::new();
+    let mut waiters = HashMap::<u32, oneshot::Sender<std::result::Result<Value, Value>>>::new();
     let mut events = HashMap::<Option<SessionId>, Vec<mpsc::UnboundedSender<model::Event>>>::new();
 
     loop {
@@ -350,13 +337,9 @@ async fn r#loop(
                     Some(Control::Subscribe(session_id, tx)) => {
                         events.entry(session_id).or_insert_with(Default::default).push(tx);
                     }
-                    Some(Control::Request(session_id, id, request, result)) => {
+                    Some(Control::Request(id, request, result)) => {
                         channel.send(request).await?;
-                        waiters.insert((session_id, id), result);
-                    }
-                    Some(Control::Disconnect(session_id)) => {
-                        waiters = waiters.drain().filter(|((s, _), _)| s != &session_id).collect();
-                        events.remove(&session_id);
+                        waiters.insert(id, result);
                     }
                     None => break,
                 }
@@ -373,14 +356,14 @@ async fn r#loop(
                                 }
                             }
 
-                            model::Response::Return(session_id, id, v) => {
-                                if let Some(tx) = waiters.remove(&(session_id, id)) {
+                            model::Response::Return(_, id, v) => {
+                                if let Some(tx) = waiters.remove(&id) {
                                     tx.send(Ok(v)).unwrap();
                                 }
                             }
 
-                            model::Response::Error(session_id, id, err) => {
-                                if let Some(tx) = waiters.remove(&(session_id, id)) {
+                            model::Response::Error(_, id, err) => {
+                                if let Some(tx) = waiters.remove(&id) {
                                     tx.send(Err(err)).unwrap();
                                 }
                             }
@@ -400,12 +383,10 @@ async fn r#loop(
 enum Control {
     Subscribe(Option<SessionId>, mpsc::UnboundedSender<model::Event>),
     Request(
-        Option<SessionId>,
         u32,
         Value,
         oneshot::Sender<std::result::Result<Value, Value>>,
     ),
-    Disconnect(Option<SessionId>),
 }
 
 /// Message loop.
@@ -437,6 +418,7 @@ impl CdpClient {
         };
         let browser = browser.map(Arc::new);
         let session = CdpSession {
+            idgen: Arc::new(AtomicU32::default()),
             session_id: None,
             control_tx: control_tx.clone(),
             browser,
@@ -476,6 +458,7 @@ impl CdpClient {
     ) -> CdpSession {
         let session_id = Some(SessionId::from(session_id.as_ref()));
         CdpSession {
+            idgen: self.idgen.clone(),
             session_id,
             control_tx: self.control_tx.clone(),
             browser: self.browser.clone(),
