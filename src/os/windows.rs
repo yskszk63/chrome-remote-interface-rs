@@ -1,12 +1,11 @@
-use std::future::Future;
 use std::io;
 use std::pin::Pin;
-use std::process::Command;
-use std::task::{Context, Poll, Waker};
+use std::task::{Context, Poll};
 
 use futures::sink::Sink;
-use futures::{ready, FutureExt, Stream};
+use futures::Stream;
 use serde_json::Value;
+use tokio::process::{Child, Command};
 
 pub const USE_PIPE_DEFAULT: bool = false;
 

@@ -373,7 +373,6 @@ impl CdpClient {
         Ok(Self::connect_internal(channel, browser).await)
     }
 
-    #[cfg(unix)]
     async fn connect_pipe(browser: Browser, channel: os::PipeChannel) -> Result<(Self, Loop)> {
         let channel = Channel::Pipe(channel);
         Ok(Self::connect_internal(channel, Some(browser)).await)
