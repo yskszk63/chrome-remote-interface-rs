@@ -21,7 +21,7 @@ impl PipeChannel {
 impl Stream for PipeChannel {
     type Item = crate::Result<Value>;
 
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         todo!()
     }
 }
@@ -29,19 +29,19 @@ impl Stream for PipeChannel {
 impl Sink<Value> for PipeChannel {
     type Error = crate::Error;
 
-    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         todo!()
     }
 
-    fn start_send(self: Pin<&mut Self>, item: Value) -> Result<(), Self::Error> {
+    fn start_send(self: Pin<&mut Self>, _: Value) -> Result<(), Self::Error> {
         todo!()
     }
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         todo!()
     }
 
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_close(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         todo!()
     }
 }
@@ -50,7 +50,7 @@ impl Sink<Value> for PipeChannel {
 pub struct OsPipe {}
 
 impl OsPipe {
-    pub fn edit_command_and_new(command: &mut Command) -> io::Result<Self> {
+    pub fn edit_command_and_new(_: &mut Command) -> io::Result<Self> {
         todo!()
     }
 }
@@ -65,6 +65,6 @@ pub async fn proc_kill(mut proc: Child) {
     proc.kill().await.ok();
 }
 
-pub fn proc_kill_sync(proc: Child) {
+pub fn proc_kill_sync(mut proc: Child) {
     proc.start_kill().ok();
 }
