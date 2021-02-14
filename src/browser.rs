@@ -237,7 +237,7 @@ impl Browser {
             match File::open(&f).await {
                 Ok(f) => {
                     let metadata = f.metadata().await?;
-                    if metadata.modified()? > self.when {
+                    if metadata.modified()? >= self.when {
                         let mut f = BufReader::new(f).lines();
                         let maybe_port = f.next_line().await?;
                         let maybe_path = f.next_line().await?;
