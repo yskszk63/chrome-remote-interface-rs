@@ -12,12 +12,6 @@ pub const USE_PIPE_DEFAULT: bool = false;
 #[derive(Debug)]
 pub struct PipeChannel {}
 
-impl PipeChannel {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
 impl Stream for PipeChannel {
     type Item = crate::Result<Value>;
 
@@ -56,7 +50,7 @@ impl OsPipe {
 }
 
 impl From<OsPipe> for PipeChannel {
-    fn from(v: OsPipe) -> Self {
+    fn from(_: OsPipe) -> Self {
         todo!()
     }
 }
