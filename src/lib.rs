@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/chrome-remote-interface/0.1.0-alpha.3")]
+#![doc(html_root_url = "https://docs.rs/chrome-remote-interface/0.1.0-alpha.4")]
 //! [Chrome DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/) client.
 //!
 //! Currently Work In Progress.
