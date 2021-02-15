@@ -1,4 +1,3 @@
-use std::future::Future;
 use std::io;
 use std::os::unix::io::IntoRawFd;
 use std::pin::Pin;
@@ -89,13 +88,16 @@ impl Sink<Value> for PipeChannel {
             pipein,
             ..
         } = self.get_mut();
-        let fut = pipein.write_all(wbuf);
-        tokio::pin!(fut);
-        ready!(fut.poll(cx)?);
+
+        while wbuf.has_remaining() {
+            let fut = pipein.write_buf(wbuf);
+            tokio::pin!(fut);
+            ready!(fut.poll_unpin(cx))?;
+        }
+
         for w in wakers.drain(..) {
             w.wake();
         }
-        wbuf.clear();
         Poll::Ready(Ok(()))
     }
 
@@ -169,5 +171,42 @@ pub fn proc_kill_sync(proc: Child) {
         let pid = Pid::from_raw(pid as i32);
         kill(pid, Some(SIGTERM)).ok(); // FIXME
         waitpid(Some(pid), None).ok(); // FIXME blocking
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_large_data() {
+        use crate::model::target::CreateTargetCommand;
+        use crate::model::Command;
+        use futures::sink::SinkExt;
+        use tokio::io::AsyncReadExt;
+
+        let (mut rx, pipein) = tokio_pipe::pipe().unwrap();
+        let (pipeout, _) = tokio_pipe::pipe().unwrap();
+
+        let task1 = async move {
+            let mut channel = PipeChannel::new(pipein, pipeout);
+            let url = vec!['a'; 541858].into_iter().collect();
+            let data = CreateTargetCommand::builder().url(url).build().unwrap();
+            let data = data.into_request(None, 0);
+            let data = serde_json::to_value(data).unwrap();
+
+            let mut result = serde_json::to_vec(&data).unwrap();
+            result.push(0);
+            channel.send(data).await.unwrap();
+            result
+        };
+        let task2 = async move {
+            let mut buf = vec![];
+            rx.read_to_end(&mut buf).await.unwrap();
+            buf
+        };
+
+        let (expect, actual) = tokio::join!(task1, task2);
+        assert_eq!(String::from_utf8(expect), String::from_utf8(actual));
     }
 }
