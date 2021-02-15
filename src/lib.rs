@@ -62,12 +62,8 @@ use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
-#[cfg(unix)]
-use std::task::Waker;
 use std::task::{Context, Poll};
 
-#[cfg(unix)]
-use bytes::{Buf, BytesMut};
 use futures::channel::mpsc;
 use futures::channel::oneshot;
 use futures::future::FutureExt;
@@ -76,11 +72,7 @@ use futures::select;
 use futures::sink::{Sink, SinkExt};
 use futures::stream::{Fuse, Stream, StreamExt};
 use serde_json::Value;
-#[cfg(unix)]
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
-#[cfg(unix)]
-use tokio_pipe::{PipeRead, PipeWrite};
 use tokio_tungstenite::tungstenite::protocol::Message;
 use tokio_tungstenite::WebSocketStream;
 use url::Url;
@@ -90,6 +82,7 @@ pub use chrome_remote_interface_model as model;
 use model::SessionId;
 
 mod browser;
+pub(crate) mod os;
 
 /// Chrome DevTools Protocol Client Error.
 #[derive(Debug, thiserror::Error)]
@@ -135,27 +128,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 enum Channel {
     Ws(Fuse<WebSocketStream<TcpStream>>),
-    #[cfg(unix)]
-    Pipe {
-        pipein: PipeWrite,
-        pipeout: BufReader<PipeRead>,
-        wbuf: BytesMut,
-        rbuf: Vec<u8>,
-        wakers: Vec<Waker>,
-    },
-}
-
-#[cfg(unix)]
-impl Channel {
-    fn new_pipe(pipein: PipeWrite, pipeout: PipeRead) -> Self {
-        Channel::Pipe {
-            pipein,
-            pipeout: BufReader::new(pipeout),
-            wbuf: Default::default(),
-            rbuf: Default::default(),
-            wakers: Default::default(),
-        }
-    }
+    Pipe(os::PipeChannel),
 }
 
 impl Stream for Channel {
@@ -176,18 +149,7 @@ impl Stream for Channel {
                 }
             },
 
-            #[cfg(unix)]
-            Self::Pipe { pipeout, rbuf, .. } => {
-                let fut = pipeout.read_until(0, rbuf);
-                tokio::pin!(fut);
-                if ready!(fut.poll_unpin(cx)?) == 0 {
-                    Poll::Ready(None)
-                } else {
-                    let v = serde_json::from_slice(&rbuf[..rbuf.len() - 1])?;
-                    rbuf.clear();
-                    Poll::Ready(Some(Ok(v)))
-                }
-            }
+            Self::Pipe(inner) => inner.poll_next_unpin(cx),
         }
     }
 }
@@ -202,16 +164,7 @@ impl Sink<Value> for Channel {
                 Poll::Ready(Ok(()))
             }
 
-            #[cfg(unix)]
-            Self::Pipe { wbuf, wakers, .. } => {
-                if wbuf.has_remaining() {
-                    let waker = cx.waker().clone();
-                    wakers.push(waker);
-                    Poll::Pending
-                } else {
-                    Poll::Ready(Ok(()))
-                }
-            }
+            Self::Pipe(inner) => inner.poll_ready_unpin(cx),
         }
     }
 
@@ -223,12 +176,7 @@ impl Sink<Value> for Channel {
                 Ok(())
             }
 
-            #[cfg(unix)]
-            Self::Pipe { wbuf, .. } => {
-                wbuf.extend_from_slice(&serde_json::to_vec(&item)?);
-                wbuf.extend_from_slice(&[0]);
-                Ok(())
-            }
+            Self::Pipe(inner) => inner.start_send_unpin(item),
         }
     }
 
@@ -239,22 +187,7 @@ impl Sink<Value> for Channel {
                 Poll::Ready(Ok(()))
             }
 
-            #[cfg(unix)]
-            Self::Pipe {
-                wbuf,
-                pipein,
-                wakers,
-                ..
-            } => {
-                let fut = pipein.write_all(wbuf);
-                tokio::pin!(fut);
-                ready!(fut.poll(cx)?);
-                for w in wakers.drain(..) {
-                    w.wake();
-                }
-                wbuf.clear();
-                Poll::Ready(Ok(()))
-            }
+            Self::Pipe(inner) => inner.poll_flush_unpin(cx),
         }
     }
 
@@ -265,8 +198,7 @@ impl Sink<Value> for Channel {
                 Poll::Ready(Ok(()))
             }
 
-            #[cfg(unix)]
-            this @ Self::Pipe { .. } => Pin::new(this).poll_flush(cx),
+            Self::Pipe(inner) => inner.poll_close_unpin(cx),
         }
     }
 }
@@ -441,13 +373,8 @@ impl CdpClient {
         Ok(Self::connect_internal(channel, browser).await)
     }
 
-    #[cfg(unix)]
-    async fn connect_pipe(
-        browser: Browser,
-        pipein: PipeWrite,
-        pipeout: PipeRead,
-    ) -> Result<(Self, Loop)> {
-        let channel = Channel::new_pipe(pipein, pipeout);
+    async fn connect_pipe(browser: Browser, channel: os::PipeChannel) -> Result<(Self, Loop)> {
+        let channel = Channel::Pipe(channel);
         Ok(Self::connect_internal(channel, Some(browser)).await)
     }
 
