@@ -81,6 +81,18 @@ pub use browser::*;
 pub use chrome_remote_interface_model as model;
 use model::SessionId;
 
+macro_rules! recv {
+    ($len:expr, $content:expr) => {
+        log::trace!(target: "chrome_remote_interface::protocol", "<< [{} bytes] {}", $len, $content);
+    }
+}
+
+macro_rules! send {
+    ($len:expr, $content:expr) => {
+        log::trace!(target: "chrome_remote_interface::protocol", ">> [{} bytes] {}", $len, $content);
+    }
+}
+
 mod browser;
 pub(crate) mod os;
 
@@ -139,10 +151,12 @@ impl Stream for Channel {
             Self::Ws(ws) => loop {
                 match ready!(ws.poll_next_unpin(cx)?) {
                     Some(Message::Text(m)) => {
-                        return Poll::Ready(Some(Ok(serde_json::from_str(&m)?)))
+                        recv!(m.bytes().len(), m);
+                        return Poll::Ready(Some(Ok(serde_json::from_str(&m)?)));
                     }
                     Some(Message::Binary(m)) => {
-                        return Poll::Ready(Some(Ok(serde_json::from_slice(&m)?)))
+                        recv!(m.len(), String::from_utf8_lossy(&m));
+                        return Poll::Ready(Some(Ok(serde_json::from_slice(&m)?)));
                     }
                     Some(..) => {}
                     None => return Poll::Ready(None),
@@ -172,6 +186,7 @@ impl Sink<Value> for Channel {
         match self.get_mut() {
             Self::Ws(ws) => {
                 let item = serde_json::to_string(&item)?;
+                send!(item.bytes().len(), &item);
                 ws.start_send_unpin(Message::Text(item))?;
                 Ok(())
             }
@@ -264,7 +279,6 @@ async fn r#loop(
     loop {
         select! {
             ctrl = control_rx.next() => {
-                log::trace!("Control message received. {:?}", ctrl);
                 match ctrl {
                     Some(Control::Subscribe(session_id, tx)) => {
                         events.entry(session_id).or_insert_with(Default::default).push(tx);
