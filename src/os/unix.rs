@@ -50,7 +50,9 @@ impl Stream for PipeChannel {
         if ready!(fut.poll_unpin(cx)?) == 0 {
             Poll::Ready(None)
         } else {
-            let v = serde_json::from_slice(&rbuf[..rbuf.len() - 1])?;
+            let b = &rbuf[..rbuf.len() - 1];
+            recv!(b.len(), String::from_utf8_lossy(b));
+            let v = serde_json::from_slice(b)?;
             rbuf.clear();
             Poll::Ready(Some(Ok(v)))
         }
@@ -73,7 +75,9 @@ impl Sink<Value> for PipeChannel {
 
     fn start_send(self: Pin<&mut Self>, item: Value) -> Result<(), Self::Error> {
         let Self { wbuf, .. } = self.get_mut();
-        wbuf.extend_from_slice(&serde_json::to_vec(&item)?);
+        let item = serde_json::to_vec(&item)?;
+        send!(item.len(), String::from_utf8_lossy(&item));
+        wbuf.extend_from_slice(&item);
         wbuf.extend_from_slice(&[0]);
         Ok(())
     }
