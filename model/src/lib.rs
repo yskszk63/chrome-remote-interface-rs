@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/chrome-remote-interface-model/0.1.0-alpha.4")]
+#![doc(html_root_url = "https://docs.rs/chrome-remote-interface-model/0.1.0-alpha.5")]
 //! Chrome DevTools Protocol message model.
 //!
 //! ## License
