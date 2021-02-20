@@ -58,6 +58,7 @@
 use std::collections::HashMap;
 use std::future::Future;
 use std::io;
+use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -71,6 +72,7 @@ use futures::ready;
 use futures::select;
 use futures::sink::{Sink, SinkExt};
 use futures::stream::{Fuse, Stream, StreamExt};
+use serde::Deserialize;
 use serde_json::Value;
 use tokio::net::TcpStream;
 use tokio_tungstenite::tungstenite::protocol::Message;
@@ -232,6 +234,32 @@ impl Stream for CdpEvents {
     }
 }
 
+/// Chrome DevTools Protocol Client Command Request Future.
+#[derive(Debug)]
+pub struct Request<R> {
+    tx_result: Option<Result<()>>,
+    rx: oneshot::Receiver<std::result::Result<Value, Value>>,
+    _phantom: PhantomData<R>,
+}
+
+impl<R> Future for Request<R>
+where
+    R: for<'r> Deserialize<'r> + Unpin,
+{
+    type Output = Result<R>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        if let Some(r) = this.tx_result.take() {
+            r?;
+        }
+        match ready!(this.rx.poll_unpin(cx))? {
+            Ok(v) => Poll::Ready(Ok(serde_json::from_value(v)?)),
+            Err(err) => Poll::Ready(Err(Error::Response(err))),
+        }
+    }
+}
+
 /// Chrome DevTools Protocol Session.
 #[derive(Debug, Clone)]
 pub struct CdpSession {
@@ -243,20 +271,22 @@ pub struct CdpSession {
 
 impl CdpSession {
     /// Request for Chrome DevTools Protocol Command.
-    pub async fn request<C>(&mut self, command: C) -> Result<C::Return>
+    pub fn request<C>(&mut self, command: C) -> Request<C::Return>
     where
         C: model::Command,
     {
         let id = self.idgen.fetch_add(1, Ordering::SeqCst);
         let request = command.into_request(self.session_id.clone(), id);
-        let request = serde_json::to_value(&request)?;
+        let request = serde_json::to_value(&request).unwrap(); // FIXME
         let (tx, rx) = oneshot::channel();
-        self.control_tx
-            .unbounded_send(Control::Request(id, request, tx))?;
+        let tx_result = self
+            .control_tx
+            .unbounded_send(Control::Request(id, request, tx));
 
-        match rx.await? {
-            Ok(v) => Ok(serde_json::from_value(v)?),
-            Err(e) => Err(Error::Response(e)),
+        Request {
+            tx_result: Some(tx_result.map_err(Into::into)),
+            rx,
+            _phantom: PhantomData,
         }
     }
 
