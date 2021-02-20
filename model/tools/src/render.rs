@@ -994,26 +994,10 @@ mod event {
 mod domain {
     use super::*;
 
-    impl Domain {
-        fn experimental(&self) -> bool {
-            !self.types.is_empty()
-                && self.commands.is_empty()
-                && self.types.is_empty()
-                && self.types.iter().all(|t| t.annotation().experimental)
-                && self.commands.iter().all(|c| c.annotation().experimental)
-                && self.events.iter().all(|e| e.annotation().experimental)
-        }
-    }
-
     impl Rendarable for Domain {
         fn render(&self, cx: &Context) -> TokenStream {
             let doc = self.doc();
             let meta = self.meta();
-            let experimental = if self.experimental() {
-                quote! { #[cfg(feature = "experimental")] }
-            } else {
-                quote! {}
-            };
             let name = format_ident!("{}", self.domain.to_snake_case());
             let types = cx.render_with(&self.types);
             let commands = cx.render_with(&self.commands);
@@ -1022,7 +1006,6 @@ mod domain {
             quote! {
                 #doc
                 #meta
-                #experimental
                 pub mod #name {
                     use super::*;
 
