@@ -22,11 +22,7 @@ trait AnnotatableExt: Annotatable {
         } else {
             quote! {}
         };
-        let expr = if a.experimental {
-            quote! { #[cfg(feature = "experimental")] }
-        } else {
-            quote! {}
-        };
+        let expr = self.meta_for_trait_impl();
 
         quote! {
             #depr
@@ -36,10 +32,28 @@ trait AnnotatableExt: Annotatable {
 
     fn meta_for_trait_impl(&self) -> TokenStream {
         let a = self.annotation();
-        if a.experimental {
-            quote! { #[cfg(feature = "experimental")] }
-        } else {
-            quote! {}
+        match (a.experimental, self.deps().as_deref()) {
+            (true, Some(deps)) => {
+                quote! {
+                    #[cfg(all(feature = "experimental", #(feature = #deps),*))]
+                    #[cfg_attr(docsrs, doc(cfg(all(feature = "experimental", #(feature = #deps),*))))]
+                }
+            }
+            (true, None) => {
+                quote! {
+                    #[cfg(feature = "experimental")]
+                    #[cfg_attr(docsrs, doc(cfg(feature = "experimental")))]
+                }
+            }
+            (false, Some(deps)) => {
+                quote! {
+                    #[cfg(all(#(feature = #deps),*))]
+                    #[cfg_attr(docsrs, doc(cfg(all(#(feature = #deps),*))))]
+                }
+            }
+            (false, None) => {
+                quote! {}
+            }
         }
     }
 
