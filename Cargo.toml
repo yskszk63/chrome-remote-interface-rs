@@ -1,6 +1,6 @@
 [package]
 name = "chrome-remote-interface"
-version = "0.1.0-alpha.5"
+version = "0.1.0-alpha.6"
 authors = ["yskszk63 <yskszk63@gmail.com>"]
 edition = "2018"
 description = "Chrome DevTools Protocol Client."
@@ -50,7 +50,7 @@ features = [
 ]
 
 [dependencies.chrome-remote-interface-model]
-version = "0.1.0-alpha.5"
+version = "0.1.0-alpha.6"
 path = "model"
 
 [dev-dependencies]
