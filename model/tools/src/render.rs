@@ -22,11 +22,7 @@ trait AnnotatableExt: Annotatable {
         } else {
             quote! {}
         };
-        let expr = if a.experimental {
-            quote! { #[cfg(feature = "experimental")] }
-        } else {
-            quote! {}
-        };
+        let expr = self.meta_for_trait_impl();
 
         quote! {
             #depr
@@ -36,10 +32,28 @@ trait AnnotatableExt: Annotatable {
 
     fn meta_for_trait_impl(&self) -> TokenStream {
         let a = self.annotation();
-        if a.experimental {
-            quote! { #[cfg(feature = "experimental")] }
-        } else {
-            quote! {}
+        match (a.experimental, self.deps().as_deref()) {
+            (true, Some(deps)) => {
+                quote! {
+                    #[cfg(all(feature = "experimental", #(feature = #deps),*))]
+                    #[cfg_attr(docsrs, doc(cfg(all(feature = "experimental", #(feature = #deps),*))))]
+                }
+            }
+            (true, None) => {
+                quote! {
+                    #[cfg(feature = "experimental")]
+                    #[cfg_attr(docsrs, doc(cfg(feature = "experimental")))]
+                }
+            }
+            (false, Some(deps)) => {
+                quote! {
+                    #[cfg(all(#(feature = #deps),*))]
+                    #[cfg_attr(docsrs, doc(cfg(all(#(feature = #deps),*))))]
+                }
+            }
+            (false, None) => {
+                quote! {}
+            }
         }
     }
 
@@ -980,26 +994,10 @@ mod event {
 mod domain {
     use super::*;
 
-    impl Domain {
-        fn experimental(&self) -> bool {
-            !self.types.is_empty()
-                && self.commands.is_empty()
-                && self.types.is_empty()
-                && self.types.iter().all(|t| t.annotation().experimental)
-                && self.commands.iter().all(|c| c.annotation().experimental)
-                && self.events.iter().all(|e| e.annotation().experimental)
-        }
-    }
-
     impl Rendarable for Domain {
         fn render(&self, cx: &Context) -> TokenStream {
             let doc = self.doc();
             let meta = self.meta();
-            let experimental = if self.experimental() {
-                quote! { #[cfg(feature = "experimental")] }
-            } else {
-                quote! {}
-            };
             let name = format_ident!("{}", self.domain.to_snake_case());
             let types = cx.render_with(&self.types);
             let commands = cx.render_with(&self.commands);
@@ -1008,7 +1006,6 @@ mod domain {
             quote! {
                 #doc
                 #meta
-                #experimental
                 pub mod #name {
                     use super::*;
 

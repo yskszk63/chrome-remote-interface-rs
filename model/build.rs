@@ -25,6 +25,8 @@ fn main() -> anyhow::Result<()> {
         anyhow::bail!("failed to run rustfmt")
     }
 
+    tools::check_features("Cargo.toml", "protocol.json")?;
+
     println!("cargo:rerun-if-changed=protocol.json");
     Ok(())
 }

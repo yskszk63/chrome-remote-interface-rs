@@ -4,8 +4,10 @@ use std::io::Write;
 use std::path::Path;
 
 use anyhow::Context as _;
+pub use check_features::check_features;
 use serde::Deserialize;
 
+mod check_features;
 mod render;
 
 #[derive(Debug, Deserialize)]
@@ -108,6 +110,10 @@ trait Typed {
 
 trait Annotatable {
     fn annotation(&self) -> &Annotation;
+
+    fn deps(&self) -> Option<Vec<String>> {
+        None
+    }
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -239,6 +245,15 @@ struct Domain {
 impl Annotatable for Domain {
     fn annotation(&self) -> &Annotation {
         &self.annotation
+    }
+
+    fn deps(&self) -> Option<Vec<String>> {
+        Some(
+            vec![self.domain.clone()]
+                .into_iter()
+                .chain(self.dependencies.clone().into_iter())
+                .collect(),
+        )
     }
 }
 
