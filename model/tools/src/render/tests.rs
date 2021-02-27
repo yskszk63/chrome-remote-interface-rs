@@ -1,8 +1,9 @@
 use super::*;
-use pretty_assertions::assert_eq;
 use std::io::Read;
 use std::io::Write;
 use std::process::{Command as StdCommand, Stdio};
+
+use similar::{TextDiff, ChangeTag};
 
 fn rustfmt(prog: &TokenStream) -> String {
     let mut proc = StdCommand::new("rustfmt")
@@ -23,7 +24,27 @@ fn rustfmt(prog: &TokenStream) -> String {
 fn assert_eq(actual: &TokenStream, expect: &TokenStream) {
     let actual = rustfmt(actual);
     let expect = rustfmt(expect);
-    assert_eq!(expect, actual);
+
+    let mut changes = String::new();
+    let mut change_detect = false;
+    let diff = TextDiff::from_lines(&actual, &expect);
+    for change in diff.iter_all_changes() {
+        change_detect |= match change.tag() {
+            ChangeTag::Delete | ChangeTag::Insert => true,
+            ChangeTag::Equal => false,
+        };
+
+        let sign = match change.tag() {
+            ChangeTag::Delete => "-",
+            ChangeTag::Insert => "+",
+            ChangeTag::Equal => " ",
+        };
+        changes += &format!("{}{}", sign, change);
+    }
+
+    if change_detect {
+        panic!("not equals\n{}", changes);
+    }
 }
 
 #[test]
@@ -41,10 +62,12 @@ fn test_protocol() {
             #![allow(deprecated)]
             #![allow(clippy::many_single_char_names)]
             #![allow(clippy::new_without_default)]
+            #![allow(clippy::wrong_self_convention)]
             use std::iter::{IntoIterator, FromIterator};
             use std::ops::Deref;
             use serde::{Serialize, Deserialize};
             use serde_json::Value as JsonValue;
+            #[doc = "Session id."]
             #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
             pub struct SessionId(String);
             impl From<&str> for SessionId {
@@ -57,6 +80,7 @@ fn test_protocol() {
                     Self(v)
                 }
             }
+            #[doc = "Message from client."]
             #[derive(Debug, Clone, Serialize)]
             pub struct Request<T>
                 where
@@ -68,6 +92,7 @@ fn test_protocol() {
                     method: &'static str,
                     params: T,
                 }
+            #[doc(hidden)]
             #[derive(Debug, Clone, Deserialize)]
             #[serde(untagged)]
             pub enum RawResponse {
@@ -118,16 +143,24 @@ fn test_protocol() {
                     }
                 }
             }
+            #[doc = "Message structure from Chrome."]
             #[derive(Debug, Clone, Deserialize)]
             #[serde(from = "RawResponse")]
             pub enum Response {
+                #[doc = "Event message."]
                 Event(Option<SessionId>, Event),
+                #[doc = "Command success message."]
                 Return(Option<SessionId>, u32, JsonValue),
+                #[doc = "Command failure message."]
                 Error(Option<SessionId>, u32, JsonValue),
             }
+            #[doc = "Chrome DevTools Protocol Command."]
             pub trait Command: Serialize {
+                #[doc = "Return type."]
                 type Return: for<'a> Deserialize<'a>;
+                #[doc = "Command method name."]
                 const METHOD: &'static str;
+                #[doc = "Into command request."]
                 fn into_request(self, session_id: Option<SessionId>, id: u32) -> Request<Self>
                 where
                     Self: Sized,
@@ -140,10 +173,13 @@ fn test_protocol() {
                     }
                 }
             }
+            #[doc = "Generating Chrome DevTools protocol version."]
             pub const VERSION: &str = "1.3";
+            #[doc = "Chrome DevTools Protocol event."]
             #[derive(Debug, Clone, Deserialize)]
             #[serde(tag = "method", content = "params")]
             pub enum Event {
+                #[doc = "Unknown event."]
                 #[serde(skip)]
                 Unknown(String, JsonValue),
             }
@@ -166,6 +202,8 @@ fn test_domain() {
     };
     let prog = Context::new_root(&Default::default()).render_with(&domain);
     let expect = quote! {
+        #[cfg(all(feature = "domain"))]
+        #[cfg_attr(docsrs, doc(cfg(all(feature = "domain"))))]
         pub mod domain {
             use super::*;
         }
