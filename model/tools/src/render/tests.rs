@@ -3,7 +3,7 @@ use std::io::Read;
 use std::io::Write;
 use std::process::{Command as StdCommand, Stdio};
 
-use similar::{TextDiff, ChangeTag};
+use similar::{ChangeTag, TextDiff};
 
 fn rustfmt(prog: &TokenStream) -> String {
     let mut proc = StdCommand::new("rustfmt")
