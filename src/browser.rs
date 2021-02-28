@@ -42,7 +42,7 @@ enum UserDataDir {
 
 impl UserDataDir {
     async fn generated() -> Result<Self> {
-        let dirs = ProjectDirs::from("", "", "chrome-remote-interface");
+        let dirs = ProjectDirs::from("", "", "chromium");
         if let Some(dirs) = dirs {
             // Newer Ubunts chromium runs in snapcraft.
             // Snapcraft chromium can not access /tmp dir.
