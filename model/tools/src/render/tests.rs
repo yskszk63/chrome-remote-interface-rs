@@ -10,6 +10,7 @@ fn rustfmt(prog: &TokenStream) -> String {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
+        .env("RUST_LOG", "")
         .spawn()
         .unwrap();
     write!(&mut proc.stdin.take().unwrap(), "{}", prog).unwrap();

@@ -27,7 +27,8 @@ jobs:
     - name: Install chromium (Ubuntu)
       run: |
         sudo apt update
-        sudo apt install chromium-browser
+        sudo apt install --no-install-recommends chromium-browser
+        chromium-browser --version
       if: matrix.os == 'ubuntu-latest'
 
     - name: Install chromium (Windows)
@@ -46,5 +47,7 @@ jobs:
       timeout-minutes: 10
       with:
         command: test
-        args: --no-fail-fast --workspace -- --nocapture
+        args: --no-fail-fast
+      env:
+        RUST_LOG: trace
 # vim: set ts=2 sts=2 sw=2:

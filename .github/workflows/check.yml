@@ -37,6 +37,9 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
+    - name: Dump chromium version.
+      run: chromium-browser --version
+
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: nightly

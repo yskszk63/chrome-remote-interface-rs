@@ -3,8 +3,9 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::{Duration, SystemTime};
 
+use dirs::home_dir;
 use tempfile::TempDir;
-use tokio::fs::File;
+use tokio::fs::{symlink_metadata, File};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::time::sleep;
@@ -40,8 +41,17 @@ enum UserDataDir {
 }
 
 impl UserDataDir {
-    fn generated() -> Result<Self> {
-        Ok(Self::Generated(TempDir::new()?))
+    async fn generated() -> Result<Self> {
+        let snapdir = home_dir()
+            .unwrap_or_else(|| "".into())
+            .join("snap/chromium/common");
+        if let Ok(..) = symlink_metadata(&snapdir).await {
+            // Newer Ubunts chromium runs in snapcraft.
+            // Snapcraft chromium can not access /tmp dir.
+            Ok(Self::Generated(TempDir::new_in(&snapdir)?))
+        } else {
+            Ok(Self::Generated(TempDir::new()?))
+        }
     }
 }
 
@@ -117,7 +127,7 @@ impl Launcher {
                 _ => unreachable!(),
             }
         } else {
-            UserDataDir::generated()?
+            UserDataDir::generated().await?
         };
         let headless = self.headless.unwrap_or(true);
 
@@ -132,7 +142,23 @@ impl Launcher {
             BrowserType::Chromium if cfg!(target_os = "macos") => {
                 Command::new("/Applications/Chromium.app/Contents/MacOS/Chromium")
             }
-            BrowserType::Chromium => Command::new("chromium"),
+            BrowserType::Chromium => {
+                if symlink_metadata("/usr/bin/chromium")
+                    .await
+                    .map(|m| m.is_file())
+                    .unwrap_or(false)
+                {
+                    Command::new("/usr/bin/chromium")
+                } else if symlink_metadata("/usr/bin/chromium-browser")
+                    .await
+                    .map(|m| m.is_file())
+                    .unwrap_or(false)
+                {
+                    Command::new("/usr/bin/chromium-browser")
+                } else {
+                    Command::new("chromium")
+                }
+            }
         };
 
         command.stdin(Stdio::null());
@@ -191,9 +217,11 @@ impl Launcher {
             RemoteDebugging::Ws
         };
 
+        log::debug!("browser spawned {:?}", command);
+        let proc = command.spawn()?;
         Ok(Browser {
             when: now,
-            proc: Some(command.spawn()?),
+            proc: Some(proc),
             browser_type,
             user_data_dir: Some(user_data_dir),
             remote_debugging,
@@ -230,10 +258,11 @@ impl Browser {
         }
     }
 
-    pub(crate) async fn cdp_url(&self) -> Result<Url> {
+    pub(crate) async fn cdp_url(&mut self) -> Result<Url> {
         let f = self.user_data_dir().join("DevToolsActivePort");
 
-        for _ in 0..20usize {
+        let interval = Duration::from_millis(200);
+        for n in 0..50usize {
             match File::open(&f).await {
                 Ok(f) => {
                     let metadata = f.metadata().await?;
@@ -250,10 +279,19 @@ impl Browser {
                         }
                     }
                 }
-                Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                    if self.proc.as_mut().unwrap().try_wait()?.is_some() {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "process may be terminated.",
+                        )
+                        .into());
+                    }
+                    log::trace!("{}: {:?} not found. wait {}.", n, f, interval.as_millis());
+                }
                 Err(e) => return Err(e.into()),
             }
-            sleep(Duration::from_millis(100)).await;
+            sleep(interval).await;
         }
 
         Err(BrowserError::CannotDetectUrl)
