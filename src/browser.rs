@@ -255,7 +255,7 @@ impl Browser {
                 }
                 Err(e) => return Err(e.into()),
             }
-            sleep(Duration::from_millis(100)).await;
+            sleep(Duration::from_millis(200)).await;
         }
 
         Err(BrowserError::CannotDetectUrl)
