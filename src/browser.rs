@@ -262,7 +262,7 @@ impl Browser {
         let f = self.user_data_dir().join("DevToolsActivePort");
 
         let interval = Duration::from_millis(200);
-        for n in 0..20usize {
+        for n in 0..50usize {
             match File::open(&f).await {
                 Ok(f) => {
                     let metadata = f.metadata().await?;
