@@ -46,7 +46,7 @@ impl UserDataDir {
         if let Some(dirs) = dirs {
             // Newer Ubunts chromium runs in snapcraft.
             // Snapcraft chromium can not access /tmp dir.
-            let dir = dirs.cache_dir().join("profiles");
+            let dir = dirs.config_dir().join("profiles");
             create_dir_all(&dir).await?;
             Ok(Self::Generated(TempDir::new_in(dir)?))
         } else {
