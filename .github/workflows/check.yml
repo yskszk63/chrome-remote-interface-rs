@@ -37,10 +37,8 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: Install chromium
-      run: |
-        sudo apt update
-        sudo apt install chromium-browser
+    - name: Dump chromium version.
+      run: chromium-browser --version
 
     - uses: actions-rs/toolchain@v1
       with:
