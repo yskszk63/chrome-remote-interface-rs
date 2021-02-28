@@ -191,9 +191,11 @@ impl Launcher {
             RemoteDebugging::Ws
         };
 
+        log::debug!("browser spawned {:?}", command);
+        let proc = command.spawn()?;
         Ok(Browser {
             when: now,
-            proc: Some(command.spawn()?),
+            proc: Some(proc),
             browser_type,
             user_data_dir: Some(user_data_dir),
             remote_debugging,
@@ -230,9 +232,10 @@ impl Browser {
         }
     }
 
-    pub(crate) async fn cdp_url(&self) -> Result<Url> {
+    pub(crate) async fn cdp_url(&mut self) -> Result<Url> {
         let f = self.user_data_dir().join("DevToolsActivePort");
 
+        let interval = Duration::from_millis(200);
         for n in 0..20usize {
             match File::open(&f).await {
                 Ok(f) => {
@@ -251,11 +254,18 @@ impl Browser {
                     }
                 }
                 Err(e) if e.kind() == io::ErrorKind::NotFound => {
-                    log::trace!("{}: {:?} not found. wait 100ms.", n, f);
+                    if self.proc.as_mut().unwrap().try_wait()?.is_some() {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "process may be terminated.",
+                        )
+                        .into());
+                    }
+                    log::trace!("{}: {:?} not found. wait {}.", n, f, interval.as_millis());
                 }
                 Err(e) => return Err(e.into()),
             }
-            sleep(Duration::from_millis(200)).await;
+            sleep(interval).await;
         }
 
         Err(BrowserError::CannotDetectUrl)
