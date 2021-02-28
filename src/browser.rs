@@ -3,8 +3,9 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::{Duration, SystemTime};
 
+use directories_next::ProjectDirs;
 use tempfile::TempDir;
-use tokio::fs::{symlink_metadata, File};
+use tokio::fs::{create_dir_all, symlink_metadata, File};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::time::sleep;
@@ -40,8 +41,17 @@ enum UserDataDir {
 }
 
 impl UserDataDir {
-    fn generated() -> Result<Self> {
-        Ok(Self::Generated(TempDir::new()?))
+    async fn generated() -> Result<Self> {
+        let dirs = ProjectDirs::from("", "", "chrome-remote-interface");
+        if let Some(dirs) = dirs {
+            // Newer Ubunts chromium runs in snapcraft.
+            // Snapcraft chromium can not access /tmp dir.
+            let dir = dirs.cache_dir().join("profiles");
+            create_dir_all(&dir).await?;
+            Ok(Self::Generated(TempDir::new_in(dir)?))
+        } else {
+            Ok(Self::Generated(TempDir::new()?))
+        }
     }
 }
 
@@ -117,7 +127,7 @@ impl Launcher {
                 _ => unreachable!(),
             }
         } else {
-            UserDataDir::generated()?
+            UserDataDir::generated().await?
         };
         let headless = self.headless.unwrap_or(true);
 
