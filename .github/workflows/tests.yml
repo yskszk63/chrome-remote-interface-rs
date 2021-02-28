@@ -46,5 +46,7 @@ jobs:
       timeout-minutes: 10
       with:
         command: test
-        args: --no-fail-fast --workspace -- --nocapture
+        args: --no-fail-fast --workspace
+      env:
+        RUST_LOG: trace
 # vim: set ts=2 sts=2 sw=2:
