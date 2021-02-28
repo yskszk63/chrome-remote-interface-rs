@@ -4,7 +4,7 @@ use std::process::Stdio;
 use std::time::{Duration, SystemTime};
 
 use tempfile::TempDir;
-use tokio::fs::File;
+use tokio::fs::{symlink_metadata, File};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::time::sleep;
@@ -132,7 +132,23 @@ impl Launcher {
             BrowserType::Chromium if cfg!(target_os = "macos") => {
                 Command::new("/Applications/Chromium.app/Contents/MacOS/Chromium")
             }
-            BrowserType::Chromium => Command::new("chromium"),
+            BrowserType::Chromium => {
+                if symlink_metadata("/usr/bin/chromium")
+                    .await
+                    .map(|m| m.is_file())
+                    .unwrap_or(false)
+                {
+                    Command::new("/usr/bin/chromium")
+                } else if symlink_metadata("/usr/bin/chromium-browser")
+                    .await
+                    .map(|m| m.is_file())
+                    .unwrap_or(false)
+                {
+                    Command::new("/usr/bin/chromium-browser")
+                } else {
+                    Command::new("chromium")
+                }
+            }
         };
 
         command.stdin(Stdio::null());

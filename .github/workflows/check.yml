@@ -37,6 +37,11 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
+    - name: Install chromium
+      run: |
+        sudo apt update
+        sudo apt install chromium-browser
+
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: nightly
