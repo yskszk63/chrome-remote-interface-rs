@@ -233,7 +233,7 @@ impl Browser {
     pub(crate) async fn cdp_url(&self) -> Result<Url> {
         let f = self.user_data_dir().join("DevToolsActivePort");
 
-        for _ in 0..20usize {
+        for n in 0..20usize {
             match File::open(&f).await {
                 Ok(f) => {
                     let metadata = f.metadata().await?;
@@ -250,7 +250,9 @@ impl Browser {
                         }
                     }
                 }
-                Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                    log::trace!("{}: {:?} not found. wait 100ms.", n, f);
+                }
                 Err(e) => return Err(e.into()),
             }
             sleep(Duration::from_millis(100)).await;
