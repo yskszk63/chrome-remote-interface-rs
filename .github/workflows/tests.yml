@@ -27,7 +27,8 @@ jobs:
     - name: Install chromium (Ubuntu)
       run: |
         sudo apt update
-        sudo apt install chromium-browser
+        sudo apt install --no-install-recommends chromium-browser
+        chromium-browser --version
       if: matrix.os == 'ubuntu-latest'
 
     - name: Install chromium (Windows)
