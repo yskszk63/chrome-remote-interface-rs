@@ -5,10 +5,10 @@ use bytes::{Buf, BytesMut};
 use futures::Sink;
 use futures::{ready, FutureExt, Stream};
 use serde_json::Value;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, self};
+use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 
-use crate::os::{OsPipeRead, OsPipeWrite, self};
+use crate::os::{self, OsPipeRead, OsPipeWrite};
 
 #[derive(Debug)]
 pub struct PipeChannel {
@@ -106,10 +106,7 @@ pub struct OsPipe {
 
 impl OsPipe {
     pub fn edit_command_and_new(command: &mut Command) -> io::Result<Self> {
-        os::edit_command_and_new(command).map(|(pipein, pipeout)| OsPipe {
-            pipein,
-            pipeout,
-        })
+        os::edit_command_and_new(command).map(|(pipein, pipeout)| OsPipe { pipein, pipeout })
     }
 }
 

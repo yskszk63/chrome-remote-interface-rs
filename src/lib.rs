@@ -302,12 +302,10 @@ impl CdpSession {
     }
 }
 
-async fn r#loop(
-    mut control_rx: mpsc::UnboundedReceiver<Control>,
-    mut channel: Channel,
-    browser: Option<Arc<Mutex<Browser>>>,
+async fn loop_inner(
+    control_rx: &mut mpsc::UnboundedReceiver<Control>,
+    channel: &mut Channel,
 ) -> Result<()> {
-    log::debug!("Begin loop.");
     let mut waiters = HashMap::<u32, oneshot::Sender<std::result::Result<Value, Value>>>::new();
     let mut events = HashMap::<Option<SessionId>, Vec<mpsc::UnboundedSender<model::Event>>>::new();
 
@@ -350,12 +348,24 @@ async fn r#loop(
                             }
                         }
                     }
-                    Some(Err(err)) => todo!("{:?}", err),
+                    Some(Err(err)) => return Err(err.into()),
                     None => {}
                 }
             }
         }
     }
+
+    Ok(())
+}
+
+async fn r#loop(
+    mut control_rx: mpsc::UnboundedReceiver<Control>,
+    mut channel: Channel,
+    browser: Option<Arc<Mutex<Browser>>>,
+) -> Result<()> {
+    log::debug!("Begin loop.");
+
+    let result = loop_inner(&mut control_rx, &mut channel).await;
 
     if let Some(browser) = browser {
         log::debug!("send close command.");
@@ -369,7 +379,8 @@ async fn r#loop(
         browser.lock().await.close().await;
     }
     log::debug!("Loop done.");
-    Ok(())
+
+    result
 }
 
 #[derive(Debug)]
