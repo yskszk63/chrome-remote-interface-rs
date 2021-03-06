@@ -12,6 +12,7 @@ jobs:
           - nightly
         os:
           - ubuntu-latest
+          - ubuntu-18.04
           - macos-latest
           - windows-latest
     steps:
