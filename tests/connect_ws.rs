@@ -10,8 +10,5 @@ async fn connect_ws() -> anyhow::Result<()> {
         .launch()
         .await?;
 
-    let (_, task) = browser.connect().await?;
-    tokio::spawn(task);
-
-    Ok(())
+    browser.run_with(|_| async { Ok(()) }).await
 }

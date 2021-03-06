@@ -16,27 +16,27 @@
 //!         .launch()
 //!         .await?;
 //!
-//!     let (mut client, task) = browser.connect().await?;
-//!     tokio::spawn(task); // Spawn message loop.
-//!
-//!     // Open new page
-//!     let response = client.request(CreateTargetCommand::builder()
+//!     browser.run_with(|mut client| async move {
+//!         // Open new page
+//!         let response = client.request(CreateTargetCommand::builder()
 //!             .url("https://example.org/".into())
 //!             .build()
 //!             .unwrap()
-//!         )
-//!         .await?;
+//!         ).await?;
 //!
-//!     // Attach opened page.
-//!     let response = client
-//!         .request(AttachToTargetCommand::new((*response).clone(), Some(true)))
-//!         .await?;
+//!         // Attach opened page.
+//!         let response = client
+//!             .request(AttachToTargetCommand::new((*response).clone(), Some(true)))
+//!             .await?;
 //!
-//!     // construct attached session.
-//!     let mut session = client.session(response);
-//!     // DO STUFF
+//!         // construct attached session.
+//!         let mut session = client.session(response);
 //!
-//!     Ok(())
+//!         // DO STUFF
+//!         // ...
+//!
+//!         Ok(())
+//!     }).await
 //! }
 //! ```
 //!
@@ -75,6 +75,7 @@ use futures::stream::{Fuse, Stream, StreamExt};
 use serde::Deserialize;
 use serde_json::Value;
 use tokio::net::TcpStream;
+use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::protocol::Message;
 use tokio_tungstenite::WebSocketStream;
 use url::Url;
@@ -266,7 +267,7 @@ pub struct CdpSession {
     idgen: Arc<AtomicU32>,
     session_id: Option<SessionId>,
     control_tx: mpsc::UnboundedSender<Control>,
-    browser: Option<Arc<Browser>>,
+    browser: Option<Arc<Mutex<Browser>>>,
 }
 
 impl CdpSession {
@@ -302,7 +303,9 @@ impl CdpSession {
 async fn r#loop(
     mut control_rx: mpsc::UnboundedReceiver<Control>,
     mut channel: Channel,
+    browser: Option<Arc<Mutex<Browser>>>,
 ) -> Result<()> {
+    log::debug!("Begin loop.");
     let mut waiters = HashMap::<u32, oneshot::Sender<std::result::Result<Value, Value>>>::new();
     let mut events = HashMap::<Option<SessionId>, Vec<mpsc::UnboundedSender<model::Event>>>::new();
 
@@ -352,6 +355,11 @@ async fn r#loop(
         }
     }
 
+    if let Some(browser) = browser {
+        log::debug!("browser shutdown.");
+        browser.lock().await.close().await;
+    }
+    log::debug!("Loop done.");
     Ok(())
 }
 
@@ -388,11 +396,12 @@ pub struct CdpClient {
 
 impl CdpClient {
     async fn connect_internal(channel: Channel, browser: Option<Browser>) -> (Self, Loop) {
+        let browser = browser.map(|b| Arc::new(Mutex::new(b)));
+
         let (control_tx, control_rx) = mpsc::unbounded();
         let task = Loop {
-            future: Box::pin(r#loop(control_rx, channel)),
+            future: Box::pin(r#loop(control_rx, channel, browser.clone())),
         };
-        let browser = browser.map(Arc::new);
         let session = CdpSession {
             idgen: Arc::new(AtomicU32::default()),
             session_id: None,

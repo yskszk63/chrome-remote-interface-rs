@@ -1,9 +1,11 @@
+use std::future::Future;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::{Duration, SystemTime};
 
 use dirs::home_dir;
+use futures::TryFutureExt;
 use tempfile::TempDir;
 use tokio::fs::{symlink_metadata, File};
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -300,7 +302,6 @@ impl Browser {
     /// Connect Chrome DevTools Protocol Client.
     ///
     /// This instance Ownership move to Client.
-    #[allow(unused_mut)]
     pub async fn connect(mut self) -> super::Result<(super::CdpClient, super::Loop)> {
         let maybe_channel = match &mut self.remote_debugging {
             RemoteDebugging::Ws => None,
@@ -310,6 +311,19 @@ impl Browser {
             None => super::CdpClient::connect_ws(&self.cdp_url().await?, Some(self)).await,
             Some(channel) => super::CdpClient::connect_pipe(self, channel).await,
         }
+    }
+
+    /// Connect Chrome DevTools Protocol Client and run async block.
+    pub async fn run_with<F, E, R, Fut>(self, fun: F) -> std::result::Result<R, E>
+    where
+        F: FnOnce(super::CdpClient) -> Fut,
+        E: From<super::Error>,
+        Fut: Future<Output = std::result::Result<R, E>>,
+    {
+        let (client, r#loop) = self.connect().await?;
+        let (_, result) = tokio::try_join!(r#loop.map_err(E::from), fun(client))?;
+
+        Ok(result)
     }
 }
 

@@ -17,27 +17,27 @@ async fn main() -> anyhow::Result<()> {
         .launch()
         .await?;
 
-    let (mut client, task) = browser.connect().await?;
-    tokio::spawn(task); // Spawn message loop.
-
-    // Open new page
-    let response = client.request(CreateTargetCommand::builder()
+    browser.run_with(|mut client| async move {
+        // Open new page
+        let response = client.request(CreateTargetCommand::builder()
             .url("https://example.org/".into())
             .build()
             .unwrap()
-        )
-        .await?;
+        ).await?;
 
-    // Attach opened page.
-    let response = client
-        .request(AttachToTargetCommand::new((*response).clone(), Some(true)))
-        .await?;
+        // Attach opened page.
+        let response = client
+            .request(AttachToTargetCommand::new((*response).clone(), Some(true)))
+            .await?;
 
-    // construct attached session.
-    let mut session = client.session(response);
-    // DO STUFF
+        // construct attached session.
+        let mut session = client.session(response);
 
-    Ok(())
+        // DO STUFF
+        // ...
+
+        Ok(())
+    }).await
 }
 ```
 
