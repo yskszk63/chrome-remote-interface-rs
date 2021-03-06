@@ -7,7 +7,7 @@ use std::time::{Duration, SystemTime};
 use dirs::home_dir;
 use futures::TryFutureExt;
 use tempfile::TempDir;
-use tokio::fs::{metadata, symlink_metadata, File};
+use tokio::fs::{create_dir_all, metadata, symlink_metadata, File};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::time::sleep;
@@ -50,6 +50,7 @@ impl UserDataDir {
             let snapdir = home_dir()
                 .unwrap_or_else(|| "".into())
                 .join("snap/chromium/common");
+            create_dir_all(&snapdir).await?;
             Ok(Self::Generated(TempDir::new_in(&snapdir)?))
         } else {
             Ok(Self::Generated(TempDir::new()?))
