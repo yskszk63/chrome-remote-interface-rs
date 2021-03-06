@@ -66,7 +66,7 @@ pub enum BrowserType {
 
 #[derive(Debug)]
 enum RemoteDebugging {
-    Pipe(Option<crate::os::OsPipe>),
+    Pipe(Option<crate::pipe::OsPipe>),
     Ws,
 }
 
@@ -213,7 +213,7 @@ impl Launcher {
         ]);
 
         let remote_debugging = if self.use_pipe.unwrap_or(crate::os::USE_PIPE_DEFAULT) {
-            RemoteDebugging::Pipe(Some(crate::os::OsPipe::edit_command_and_new(&mut command)?))
+            RemoteDebugging::Pipe(Some(crate::pipe::OsPipe::edit_command_and_new(&mut command)?))
         } else {
             command.arg("--remote-debugging-port=0");
             RemoteDebugging::Ws

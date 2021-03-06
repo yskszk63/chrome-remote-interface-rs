@@ -11,6 +11,7 @@
 //!
 //! #[tokio::main(flavor = "current_thread")]
 //! async fn main() -> anyhow::Result<()> {
+//!     pretty_env_logger::init();
 //!     let browser = Browser::launcher()
 //!         .headless(true) // headless mode (Default)
 //!         .launch()
@@ -98,6 +99,7 @@ macro_rules! send {
 
 mod browser;
 pub(crate) mod os;
+mod pipe;
 
 /// Chrome DevTools Protocol Client Error.
 #[derive(Debug, thiserror::Error)]
@@ -143,7 +145,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 enum Channel {
     Ws(Fuse<WebSocketStream<TcpStream>>),
-    Pipe(os::PipeChannel),
+    Pipe(pipe::PipeChannel),
 }
 
 impl Stream for Channel {
@@ -426,7 +428,7 @@ impl CdpClient {
         Ok(Self::connect_internal(channel, browser).await)
     }
 
-    async fn connect_pipe(browser: Browser, channel: os::PipeChannel) -> Result<(Self, Loop)> {
+    async fn connect_pipe(browser: Browser, channel: pipe::PipeChannel) -> Result<(Self, Loop)> {
         let channel = Channel::Pipe(channel);
         Ok(Self::connect_internal(channel, Some(browser)).await)
     }
