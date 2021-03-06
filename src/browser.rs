@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime};
 
 use dirs::home_dir;
 use tempfile::TempDir;
-use tokio::fs::{symlink_metadata, File};
+use tokio::fs::{metadata, symlink_metadata, File};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::time::sleep;
@@ -42,12 +42,12 @@ enum UserDataDir {
 
 impl UserDataDir {
     async fn generated() -> Result<Self> {
-        let snapdir = home_dir()
-            .unwrap_or_else(|| "".into())
-            .join("snap/chromium/common");
-        if let Ok(..) = symlink_metadata(&snapdir).await {
+        if let Ok(..) = metadata("/snap").await {
             // Newer Ubunts chromium runs in snapcraft.
             // Snapcraft chromium can not access /tmp dir.
+            let snapdir = home_dir()
+                .unwrap_or_else(|| "".into())
+                .join("snap/chromium/common");
             Ok(Self::Generated(TempDir::new_in(&snapdir)?))
         } else {
             Ok(Self::Generated(TempDir::new()?))
