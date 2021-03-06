@@ -116,7 +116,7 @@ impl From<OsPipe> for PipeChannel {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))] // currently unix only
 mod tests {
     use super::*;
 
