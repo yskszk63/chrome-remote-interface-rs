@@ -358,6 +358,13 @@ async fn r#loop(
     }
 
     if let Some(browser) = browser {
+        log::debug!("send close command.");
+        let close_command = model::browser::CloseCommand::new();
+        let close_command = model::Command::into_request(close_command, None, 0);
+        if let Ok(close_command) = serde_json::to_value(close_command) {
+            channel.send(close_command).await.ok();
+        }
+
         log::debug!("browser shutdown.");
         browser.lock().await.close().await;
     }
