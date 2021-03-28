@@ -348,7 +348,7 @@ async fn loop_inner(
                             }
                         }
                     }
-                    Some(Err(err)) => return Err(err.into()),
+                    Some(Err(err)) => return Err(err),
                     None => {}
                 }
             }
