@@ -1,7 +1,7 @@
 use std::io;
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::path::PathBuf;
 
 use futures::sink::Sink;
 use futures::Stream;
