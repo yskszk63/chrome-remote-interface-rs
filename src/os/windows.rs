@@ -7,6 +7,7 @@ use futures::Stream;
 use serde_json::Value;
 use tokio::io::Empty;
 use tokio::process::{Child, Command};
+use which::which;
 
 pub const USE_PIPE_DEFAULT: bool = false;
 
