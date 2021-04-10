@@ -4,6 +4,19 @@
 
 Currently Work In Progress.
 
+### Supported Browser
+
+- Chromium (latest)
+
+### Browser Discovery
+
+1. Using environemnt variable `CRI_CHROME_BIN` if specified.
+2. Search Platform path.
+    - Windows: `C:\Program Files\Chromium\Application\chrome.exe`
+    - Mac: `/Applications/Chromium.app/Contents/MacOS/Chromium`
+    - Linux: `/usr/bin/chromium` or `/usr/bin/chromium-browser`
+3. Lookup via `PATH` env var.
+
 ### Example
 
 ```rust
