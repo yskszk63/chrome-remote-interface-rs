@@ -1,5 +1,6 @@
 use std::io;
 use std::os::unix::io::IntoRawFd;
+use std::path::PathBuf;
 
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use nix::sys::signal::{kill, SIGTERM};
@@ -8,12 +9,39 @@ use nix::unistd::Pid;
 use nix::unistd::{close, dup, dup2};
 use tokio::process::{Child, Command};
 use tokio_pipe::{PipeRead, PipeWrite};
+use which::which;
 
-pub const USE_PIPE_DEFAULT: bool = !cfg!(target_os = "macos");
+#[cfg(target_os = "macos")]
+pub const USE_PIPE_DEFAULT: bool = false;
+
+#[cfg(not(target_os = "macos"))]
+pub const USE_PIPE_DEFAULT: bool = true;
 
 pub type OsPipeWrite = PipeWrite;
 
 pub type OsPipeRead = PipeRead;
+
+#[cfg(target_os = "macos")]
+pub fn find_browser(_browser: &crate::browser::BrowserType) -> Option<PathBuf> {
+    if let Ok(bin) = which("/Applications/Chromium.app/Contents/MacOS/Chromium") {
+        return Some(bin);
+    }
+
+    which("chromium").ok()
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn find_browser(_browser: &crate::browser::BrowserType) -> Option<PathBuf> {
+    if let Ok(bin) = which("/usr/bin/chromium") {
+        return Some(bin);
+    }
+
+    if let Ok(bin) = which("/usr/bin/chromium-browser") {
+        return Some(bin);
+    }
+
+    which("chromium").ok()
+}
 
 pub fn edit_command_and_new(command: &mut Command) -> io::Result<(OsPipeWrite, OsPipeRead)> {
     let (pipein_rx, pipein) = tokio_pipe::pipe()?;

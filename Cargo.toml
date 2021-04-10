@@ -18,6 +18,7 @@ log = "0.4"
 tempfile = "3.2"
 bytes = "1.0"
 dirs = "3.0"
+which = "4.1"
 
 [target.'cfg(unix)'.dependencies]
 nix = "0.19"

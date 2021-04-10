@@ -14,6 +14,14 @@ pub type OsPipeWrite = tokio::fs::File; // FIXME dummy
 
 pub type OsPipeRead = tokio::fs::File; // FIXME dummy
 
+pub fn find_browser(_browser: &crate::browser::BrowserType) -> Option<PathBuf> {
+    if let Ok(bin) = which(r#"C:\Program Files\Chromium\Application\chrome.exe"#) {
+        return Some(bin);
+    }
+
+    which("chromium").ok()
+}
+
 pub fn edit_command_and_new(command: &mut Command) -> io::Result<(OsPipeWrite, OsPipeRead)> {
     unimplemented!()
 }

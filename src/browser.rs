@@ -1,3 +1,4 @@
+use std::env;
 use std::future::Future;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -7,11 +8,12 @@ use std::time::{Duration, SystemTime};
 use dirs::home_dir;
 use futures::TryFutureExt;
 use tempfile::TempDir;
-use tokio::fs::{create_dir_all, metadata, symlink_metadata, File};
+use tokio::fs::{create_dir_all, metadata, File};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::time::sleep;
 use url::Url;
+use which::which;
 
 /// Operate browser error.
 #[derive(Debug, thiserror::Error)]
@@ -31,6 +33,10 @@ pub enum BrowserError {
     /// Failed to parse URL.
     #[error(transparent)]
     UrlParse(#[from] url::ParseError),
+
+    /// Browser not found.
+    #[error("browser not found.")]
+    BrowserNotFound,
 }
 
 type Result<T> = std::result::Result<T, BrowserError>;
@@ -69,6 +75,13 @@ pub enum BrowserType {
 enum RemoteDebugging {
     Pipe(Option<crate::pipe::OsPipe>),
     Ws,
+}
+
+fn which_browser(browser: &BrowserType) -> Option<PathBuf> {
+    if let Ok(val) = env::var(crate::BROWSER_BIN) {
+        return which(val).ok();
+    }
+    crate::os::find_browser(browser)
 }
 
 /// Launcher (Builder) for Browser.
@@ -138,30 +151,11 @@ impl Launcher {
             .browser_type
             .to_owned()
             .unwrap_or(BrowserType::Chromium);
-        let mut command = match &browser_type {
-            BrowserType::Chromium if cfg!(windows) => {
-                Command::new(r#"C:\Program Files\Chromium\Application\chrome.exe"#)
-            }
-            BrowserType::Chromium if cfg!(target_os = "macos") => {
-                Command::new("/Applications/Chromium.app/Contents/MacOS/Chromium")
-            }
-            BrowserType::Chromium => {
-                if symlink_metadata("/usr/bin/chromium")
-                    .await
-                    .map(|m| m.is_file())
-                    .unwrap_or(false)
-                {
-                    Command::new("/usr/bin/chromium")
-                } else if symlink_metadata("/usr/bin/chromium-browser")
-                    .await
-                    .map(|m| m.is_file())
-                    .unwrap_or(false)
-                {
-                    Command::new("/usr/bin/chromium-browser")
-                } else {
-                    Command::new("chromium")
-                }
-            }
+
+        let mut command = if let Some(bin) = which_browser(&browser_type) {
+            Command::new(bin)
+        } else {
+            return Err(BrowserError::BrowserNotFound);
         };
 
         command.stdin(Stdio::null());

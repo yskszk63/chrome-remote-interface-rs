@@ -85,6 +85,9 @@ pub use browser::*;
 pub use chrome_remote_interface_model as model;
 use model::SessionId;
 
+/// Environment variable key for Browser Path.
+pub const BROWSER_BIN: &str = "CRI_CHROME_BIN";
+
 macro_rules! recv {
     ($len:expr, $content:expr) => {
         log::trace!(target: "chrome_remote_interface::protocol", "<< [{} bytes] {}", $len, $content);
