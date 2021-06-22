@@ -78,7 +78,7 @@ use serde_json::Value;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::protocol::Message;
-use tokio_tungstenite::{WebSocketStream, MaybeTlsStream};
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use url::Url;
 
 pub use browser::*;
