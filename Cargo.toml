@@ -21,7 +21,7 @@ dirs = "3.0"
 which = "4.1"
 
 [target.'cfg(unix)'.dependencies]
-nix = "0.19"
+nix = "0.21"
 tokio-pipe = "0.2"
 
 [dependencies.serde]
@@ -40,7 +40,7 @@ features = [
 ]
 
 [dependencies.tokio-tungstenite]
-version = "0.13"
+version = "0.14"
 features = [
     "default",
 ]

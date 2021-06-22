@@ -78,7 +78,7 @@ use serde_json::Value;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::protocol::Message;
-use tokio_tungstenite::WebSocketStream;
+use tokio_tungstenite::{WebSocketStream, MaybeTlsStream};
 use url::Url;
 
 pub use browser::*;
@@ -145,9 +145,8 @@ impl<T> From<mpsc::TrySendError<T>> for Error {
 /// Chrome DevTools Protocol Result.
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug)]
 enum Channel {
-    Ws(Fuse<WebSocketStream<TcpStream>>),
+    Ws(Fuse<WebSocketStream<MaybeTlsStream<TcpStream>>>),
     Pipe(pipe::PipeChannel),
 }
 

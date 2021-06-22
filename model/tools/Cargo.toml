@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 anyhow = "1.0"
-nix = "0.19"
+nix = "0.21"
 quote = "1.0"
 proc-macro2 = "1.0"
 heck = "0.3"
