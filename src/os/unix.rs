@@ -11,6 +11,9 @@ use tokio::process::{Child, Command};
 use tokio_pipe::{PipeRead, PipeWrite};
 use which::which;
 
+use crate::pipe::OsPipe;
+use crate::process::ProcessBuilder;
+
 #[cfg(target_os = "macos")]
 pub const USE_PIPE_DEFAULT: bool = false;
 
@@ -20,6 +23,8 @@ pub const USE_PIPE_DEFAULT: bool = true;
 pub type OsPipeWrite = PipeWrite;
 
 pub type OsPipeRead = PipeRead;
+
+pub type OsProcess = Child;
 
 #[cfg(target_os = "macos")]
 pub fn find_browser(_browser: &crate::browser::BrowserType) -> Option<PathBuf> {
@@ -43,7 +48,14 @@ pub fn find_browser(_browser: &crate::browser::BrowserType) -> Option<PathBuf> {
     which("chromium").ok()
 }
 
-pub fn edit_command_and_new(command: &mut Command) -> io::Result<(OsPipeWrite, OsPipeRead)> {
+pub async fn spawn_with_pipe(mut builder: ProcessBuilder) -> io::Result<(OsProcess, OsPipe)> {
+    let mut command = Command::new(builder.get_program());
+    command
+        .args(builder.get_args())
+        .stdin(builder.take_stdin())
+        .stdout(builder.take_stdout())
+        .stderr(builder.take_stderr());
+
     let (pipein_rx, pipein) = tokio_pipe::pipe()?;
     let (pipeout, pipeout_tx) = tokio_pipe::pipe()?;
     let pipein_rx = pipein_rx.into_raw_fd();
@@ -64,7 +76,6 @@ pub fn edit_command_and_new(command: &mut Command) -> io::Result<(OsPipeWrite, O
     )
     .map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
 
-    command.arg("--remote-debugging-pipe");
     unsafe {
         command.pre_exec(move || {
             let pipein2 = dup(pipein_rx).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
@@ -77,10 +88,21 @@ pub fn edit_command_and_new(command: &mut Command) -> io::Result<(OsPipeWrite, O
         });
     }
 
-    Ok((pipein, pipeout))
+    let proc = command.spawn()?;
+    Ok((proc, OsPipe::new(pipein, pipeout)))
 }
 
-pub async fn proc_kill(mut proc: Child) {
+pub fn spawn(mut builder: ProcessBuilder) -> io::Result<OsProcess> {
+    let proc = Command::new(builder.get_program())
+        .args(builder.get_args())
+        .stdin(builder.take_stdin())
+        .stdout(builder.take_stdout())
+        .stderr(builder.take_stderr())
+        .spawn()?;
+    Ok(proc)
+}
+
+pub async fn proc_kill(mut proc: OsProcess) {
     if let Some(pid) = proc.id() {
         let pid = Pid::from_raw(pid as i32);
         kill(pid, Some(SIGTERM)).ok(); // FIXME
@@ -88,10 +110,14 @@ pub async fn proc_kill(mut proc: Child) {
     }
 }
 
-pub fn proc_kill_sync(proc: Child) {
+pub fn proc_kill_sync(proc: OsProcess) {
     if let Some(pid) = proc.id() {
         let pid = Pid::from_raw(pid as i32);
         kill(pid, Some(SIGTERM)).ok(); // FIXME
         waitpid(Some(pid), None).ok(); // FIXME blocking
     }
+}
+
+pub fn try_wait(proc: &mut OsProcess) -> io::Result<bool> {
+    Ok(proc.try_wait()?.is_some())
 }

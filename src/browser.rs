@@ -10,10 +10,12 @@ use futures::TryFutureExt;
 use tempfile::TempDir;
 use tokio::fs::{create_dir_all, metadata, File};
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::{Child, Command};
 use tokio::time::sleep;
 use url::Url;
 use which::which;
+
+use crate::process::Process;
+use crate::process::ProcessBuilder;
 
 /// Operate browser error.
 #[derive(Debug, thiserror::Error)]
@@ -153,7 +155,7 @@ impl Launcher {
             .unwrap_or(BrowserType::Chromium);
 
         let mut command = if let Some(bin) = which_browser(&browser_type) {
-            Command::new(bin)
+            ProcessBuilder::new(bin)
         } else {
             return Err(BrowserError::BrowserNotFound);
         };
@@ -207,17 +209,18 @@ impl Launcher {
             "--use-mock-keychain",
         ]);
 
-        let remote_debugging = if self.use_pipe.unwrap_or(crate::os::USE_PIPE_DEFAULT) {
-            RemoteDebugging::Pipe(Some(crate::pipe::OsPipe::edit_command_and_new(
-                &mut command,
-            )?))
+        let (proc, remote_debugging) = if self.use_pipe.unwrap_or(crate::os::USE_PIPE_DEFAULT) {
+            command.arg("--remote-debugging-pipe");
+            log::debug!("browser spawned {:?}", command);
+            let (proc, ospipe) = command.spawn_with_pipe().await?;
+            (proc, RemoteDebugging::Pipe(Some(ospipe)))
         } else {
             command.arg("--remote-debugging-port=0");
-            RemoteDebugging::Ws
+            log::debug!("browser spawned {:?}", command);
+            let proc = command.spawn()?;
+            (proc, RemoteDebugging::Ws)
         };
 
-        log::debug!("browser spawned {:?}", command);
-        let proc = command.spawn()?;
         Ok(Browser {
             when: now,
             proc: Some(proc),
@@ -234,7 +237,7 @@ impl Launcher {
 #[derive(Debug)]
 pub struct Browser {
     when: SystemTime,
-    proc: Option<Child>,
+    proc: Option<Process>,
     browser_type: BrowserType,
     user_data_dir: Option<UserDataDir>,
     remote_debugging: RemoteDebugging,
@@ -279,7 +282,7 @@ impl Browser {
                     }
                 }
                 Err(e) if e.kind() == io::ErrorKind::NotFound => {
-                    if self.proc.as_mut().unwrap().try_wait()?.is_some() {
+                    if self.proc.as_mut().unwrap().try_wait()? {
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
                             "process may be terminated.",
@@ -328,7 +331,7 @@ impl Browser {
     /// Close browser.
     pub async fn close(&mut self) {
         if let Some(proc) = self.proc.take() {
-            crate::os::proc_kill(proc).await;
+            proc.kill().await;
         }
         self.user_data_dir.take();
     }
@@ -337,7 +340,7 @@ impl Browser {
 impl Drop for Browser {
     fn drop(&mut self) {
         if let Some(proc) = self.proc.take() {
-            crate::os::proc_kill_sync(proc);
+            proc.kill_sync();
         }
         self.user_data_dir.take();
     }
