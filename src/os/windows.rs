@@ -8,7 +8,6 @@ use futures::sink::Sink;
 use futures::Stream;
 use serde_json::Value;
 use tokio::io::Empty;
-use tokio::process::{Child, Command};
 use which::which;
 use winspawn::{move_fd, spawn as winspawn, Child, FileDescriptor, Mode};
 
@@ -18,11 +17,11 @@ use crate::process::ProcessBuilder;
 
 pub const USE_PIPE_DEFAULT: bool = false;
 
-pub type OsPipeWrite = tokio::fs::File; // FIXME dummy
+pub type OsPipeWrite = tokio_anon_pipe::AnonPipeWrite;
 
-pub type OsPipeRead = tokio::fs::File; // FIXME dummy
+pub type OsPipeRead = tokio_anon_pipe::AnonPipeRead;
 
-pub type OsProcess = Child; // FIXME dummy
+pub type OsProcess = Child;
 
 pub fn find_browser(_browser: &crate::browser::BrowserType) -> Option<PathBuf> {
     if let Ok(bin) = which(r#"C:\Program Files\Chromium\Application\chrome.exe"#) {
@@ -32,7 +31,7 @@ pub fn find_browser(_browser: &crate::browser::BrowserType) -> Option<PathBuf> {
     which("chromium").ok()
 }
 
-pub async fn spawn_with_pipe(builder: ProcessBuilder) -> io::Result<(OsProcess)> {
+pub async fn spawn_with_pipe(builder: ProcessBuilder) -> io::Result<(OsProcess, OsPipe)> {
     let (pipein_rx, pipein) = tokio_anon_pipe::anon_pipe().await?;
     let (pipeout, pipeout_tx) = tokio_anon_pipe::anon_pipe().await?;
     let pipein_rx = pipein_rx.into_raw_handle();
@@ -41,8 +40,8 @@ pub async fn spawn_with_pipe(builder: ProcessBuilder) -> io::Result<(OsProcess)>
     let pipein_rx = FileDescriptor::from_raw_handle(pipein_rx, Mode::ReadOnly)?;
     let pipeout_tx = FileDescriptor::from_raw_handle(pipeout_tx, Mode::WriteOnly)?;
 
-    let child = move_fd(pipein_rx, 3, |_| {
-        move_fd(pipeout_tx, 4, |_| {
+    let child = move_fd(&pipein_rx, 3, |_| {
+        move_fd(&pipeout_tx, 4, |_| {
             // FIXME stdio
             winspawn(builder.get_program(), builder.get_args())
         })
@@ -57,13 +56,13 @@ pub fn spawn(builder: ProcessBuilder) -> io::Result<OsProcess> {
 }
 
 pub async fn proc_kill(mut proc: OsProcess) {
-    child.kill();
+    proc.kill();
 }
 
 pub fn proc_kill_sync(mut proc: OsProcess) {
-    child.kill();
+    proc.kill();
 }
 
 pub fn try_wait(proc: &mut OsProcess) -> io::Result<bool> {
-    Ok(child.try_wait()?.is_some())
+    Ok(proc.try_wait()?.is_some())
 }
