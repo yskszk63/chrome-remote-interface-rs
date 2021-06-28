@@ -15,7 +15,7 @@ use crate::pipe::OsPipe;
 use crate::process::Process;
 use crate::process::ProcessBuilder;
 
-pub const USE_PIPE_DEFAULT: bool = false;
+pub const USE_PIPE_DEFAULT: bool = true;
 
 pub type OsPipeWrite = tokio_anon_pipe::AnonPipeWrite;
 
