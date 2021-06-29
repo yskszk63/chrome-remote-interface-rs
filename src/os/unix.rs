@@ -1,6 +1,7 @@
 use std::io;
 use std::os::unix::io::IntoRawFd;
 use std::path::PathBuf;
+use std::process::Stdio;
 
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use nix::sys::signal::{kill, SIGTERM};
@@ -48,13 +49,13 @@ pub fn find_browser(_browser: &crate::browser::BrowserType) -> Option<PathBuf> {
     which("chromium").ok()
 }
 
-pub async fn spawn_with_pipe(mut builder: ProcessBuilder) -> io::Result<(OsProcess, OsPipe)> {
+pub async fn spawn_with_pipe(builder: ProcessBuilder) -> io::Result<(OsProcess, OsPipe)> {
     let mut command = Command::new(builder.get_program());
     command
         .args(builder.get_args())
-        .stdin(builder.take_stdin())
-        .stdout(builder.take_stdout())
-        .stderr(builder.take_stderr());
+        .stdin(Stdio::from(builder.get_stdin()))
+        .stdout(Stdio::from(builder.get_stdout()))
+        .stderr(Stdio::from(builder.get_stderr()));
 
     let (pipein_rx, pipein) = tokio_pipe::pipe()?;
     let (pipeout, pipeout_tx) = tokio_pipe::pipe()?;
@@ -92,12 +93,12 @@ pub async fn spawn_with_pipe(mut builder: ProcessBuilder) -> io::Result<(OsProce
     Ok((proc, OsPipe::new(pipein, pipeout)))
 }
 
-pub fn spawn(mut builder: ProcessBuilder) -> io::Result<OsProcess> {
+pub fn spawn(builder: ProcessBuilder) -> io::Result<OsProcess> {
     let proc = Command::new(builder.get_program())
         .args(builder.get_args())
-        .stdin(builder.take_stdin())
-        .stdout(builder.take_stdout())
-        .stderr(builder.take_stderr())
+        .stdin(Stdio::from(builder.get_stdin()))
+        .stdout(Stdio::from(builder.get_stdout()))
+        .stderr(Stdio::from(builder.get_stderr()))
         .spawn()?;
     Ok(proc)
 }

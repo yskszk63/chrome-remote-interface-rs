@@ -2,7 +2,6 @@ use std::env;
 use std::future::Future;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 use std::time::{Duration, SystemTime};
 
 use dirs::home_dir;
@@ -14,8 +13,7 @@ use tokio::time::sleep;
 use url::Url;
 use which::which;
 
-use crate::process::Process;
-use crate::process::ProcessBuilder;
+use crate::process::{Process, ProcessBuilder, ProcessStdio};
 
 /// Operate browser error.
 #[derive(Debug, thiserror::Error)]
@@ -160,11 +158,15 @@ impl Launcher {
             return Err(BrowserError::BrowserNotFound);
         };
 
-        command.stdin(Stdio::null());
+        command.stdin(ProcessStdio::null());
         if self.output.unwrap_or(false) {
-            command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
+            command
+                .stdout(ProcessStdio::inherit())
+                .stderr(ProcessStdio::inherit());
         } else {
-            command.stdout(Stdio::null()).stderr(Stdio::null());
+            command
+                .stdout(ProcessStdio::null())
+                .stderr(ProcessStdio::null());
         }
 
         if headless {
