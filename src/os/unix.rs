@@ -15,12 +15,6 @@ use which::which;
 use crate::pipe::OsPipe;
 use crate::process::ProcessBuilder;
 
-#[cfg(target_os = "macos")]
-pub const USE_PIPE_DEFAULT: bool = false;
-
-#[cfg(not(target_os = "macos"))]
-pub const USE_PIPE_DEFAULT: bool = true;
-
 pub type OsPipeWrite = PipeWrite;
 
 pub type OsPipeRead = PipeRead;

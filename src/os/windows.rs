@@ -11,8 +11,6 @@ use winspawn::{move_fd, spawn as winspawn, Child, FileDescriptor, Mode};
 use crate::pipe::OsPipe;
 use crate::process::{ProcessBuilder, ProcessStdio};
 
-pub const USE_PIPE_DEFAULT: bool = true;
-
 pub type OsPipeWrite = tokio_anon_pipe::AnonPipeWrite;
 
 pub type OsPipeRead = tokio_anon_pipe::AnonPipeRead;
