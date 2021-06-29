@@ -209,6 +209,7 @@ impl Launcher {
             "--enable-automation",
             "--password-store=basic",
             "--use-mock-keychain",
+            "--no-sandbox",
             "--no-zygote",
         ]);
 
