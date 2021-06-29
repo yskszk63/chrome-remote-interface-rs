@@ -209,6 +209,7 @@ impl Launcher {
             "--enable-automation",
             "--password-store=basic",
             "--use-mock-keychain",
+            "--no-zygote",
         ]);
 
         let (proc, remote_debugging) = if self.use_pipe.unwrap_or(true) {
