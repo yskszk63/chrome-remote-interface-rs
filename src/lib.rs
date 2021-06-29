@@ -103,6 +103,7 @@ macro_rules! send {
 mod browser;
 pub(crate) mod os;
 mod pipe;
+pub(crate) mod process;
 
 /// Chrome DevTools Protocol Client Error.
 #[derive(Debug, thiserror::Error)]
