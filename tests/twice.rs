@@ -18,6 +18,7 @@ async fn twice() -> anyhow::Result<()> {
 async fn proc() -> anyhow::Result<()> {
     let browser = Browser::launcher()
         .headless(true) // headless mode (Default)
+        .output(true)
         .launch()
         .await?;
 
