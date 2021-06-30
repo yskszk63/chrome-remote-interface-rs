@@ -78,6 +78,8 @@ pub async fn spawn_with_pipe(builder: ProcessBuilder) -> io::Result<(OsProcess, 
             let pipeout2 = dup(pipeout_tx).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
             dup2(pipein2, 3).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
             dup2(pipeout2, 4).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
+            close(pipein_rx).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
+            close(pipein_rx).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
             close(pipein2).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
             close(pipeout2).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
             nix::unistd::setsid().unwrap(); // FIXME
