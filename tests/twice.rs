@@ -5,6 +5,8 @@ mod common;
 
 #[tokio::test]
 async fn twice() -> anyhow::Result<()> {
+    pretty_env_logger::init();
+
     common::pgrep_chromium();
     proc().await?;
     common::pgrep_chromium();

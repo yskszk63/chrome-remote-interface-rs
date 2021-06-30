@@ -3,8 +3,9 @@ use chrome_remote_interface::Browser;
 
 mod common;
 
-#[tokio::main(flavor = "current_thread")]
-async fn main() -> anyhow::Result<()> {
+#[tokio::test]
+async fn test_simple() -> anyhow::Result<()> {
+    pretty_env_logger::init();
     common::pgrep_chromium();
 
     let browser = Browser::launcher()
