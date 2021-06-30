@@ -11,7 +11,11 @@ use chrome_remote_interface::Browser;
 async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init();
 
-    let browser = Browser::launcher().headless(false).output(true).launch().await?;
+    let browser = Browser::launcher()
+        .headless(false)
+        .output(true)
+        .launch()
+        .await?;
     browser
         .run_with(|mut client| async {
             let mut events = client.events()?;

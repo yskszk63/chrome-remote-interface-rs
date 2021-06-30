@@ -1,5 +1,5 @@
 use std::io;
-use std::os::unix::io::IntoRawFd;
+use std::os::unix::io::{AsRawFd, RawFd};
 use std::path::PathBuf;
 use std::process::Stdio;
 
@@ -7,7 +7,7 @@ use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use nix::sys::signal::{kill, SIGTERM};
 use nix::sys::wait::waitpid;
 use nix::unistd::Pid;
-use nix::unistd::{close, dup, dup2};
+use nix::unistd::{close, dup, dup2, setsid};
 use tokio::process::{Child, Command};
 use tokio_pipe::{PipeRead, PipeWrite};
 use which::which;
@@ -23,8 +23,7 @@ pub type OsProcess = Child;
 
 #[cfg(target_os = "macos")]
 pub fn find_browser(_browser: &crate::browser::BrowserType) -> Option<PathBuf> {
-    //if let Ok(bin) = which("/Applications/Chromium.app/Contents/MacOS/Chromium") {
-    if let Ok(bin) = which("/usr/local/bin/chromium") {
+    if let Ok(bin) = which("/Applications/Chromium.app/Contents/MacOS/Chromium") {
         return Some(bin);
     }
 
@@ -44,6 +43,23 @@ pub fn find_browser(_browser: &crate::browser::BrowserType) -> Option<PathBuf> {
     which("chromium").ok()
 }
 
+fn into_io_err(err: nix::Error) -> io::Error {
+    match err.as_errno() {
+        Some(err) => io::Error::from(err),
+        None => io::Error::new(io::ErrorKind::Other, err),
+    }
+}
+
+fn set_nonblocking(fd: RawFd) -> io::Result<()> {
+    let flags = fcntl(fd, FcntlArg::F_GETFL).map_err(into_io_err)?;
+    fcntl(
+        fd,
+        FcntlArg::F_SETFL(OFlag::from_bits_truncate(flags) ^ OFlag::O_NONBLOCK),
+    )
+    .map_err(into_io_err)?;
+    Ok(())
+}
+
 pub async fn spawn_with_pipe(builder: ProcessBuilder) -> io::Result<(OsProcess, OsPipe)> {
     let mut command = Command::new(builder.get_program());
     command
@@ -52,43 +68,36 @@ pub async fn spawn_with_pipe(builder: ProcessBuilder) -> io::Result<(OsProcess, 
         .stdout(Stdio::from(builder.get_stdout()))
         .stderr(Stdio::from(builder.get_stderr()));
 
-    let (pipein_rx, pipein) = tokio_pipe::pipe()?;
-    let (pipeout, pipeout_tx) = tokio_pipe::pipe()?;
-    let pipein_rx = pipein_rx.into_raw_fd();
-    let pipeout_tx = pipeout_tx.into_raw_fd();
+    let (input, their_input) = tokio_pipe::pipe()?;
+    let (their_output, output) = tokio_pipe::pipe()?;
 
-    let flag =
-        fcntl(pipein_rx, FcntlArg::F_GETFL).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-    fcntl(
-        pipein_rx,
-        FcntlArg::F_SETFL(OFlag::from_bits_truncate(flag) ^ OFlag::O_NONBLOCK),
-    )
-    .map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-    let flag =
-        fcntl(pipeout_tx, FcntlArg::F_GETFL).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-    fcntl(
-        pipeout_tx,
-        FcntlArg::F_SETFL(OFlag::from_bits_truncate(flag) ^ OFlag::O_NONBLOCK),
-    )
-    .map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
+    let input = input.as_raw_fd();
+    let output = output.as_raw_fd();
+    set_nonblocking(output)?;
+    set_nonblocking(output)?;
 
     unsafe {
         command.pre_exec(move || {
-            let pipein2 = dup(pipein_rx).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-            let pipeout2 = dup(pipeout_tx).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-            dup2(pipein2, 3).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-            dup2(pipeout2, 4).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-            close(pipein_rx).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-            close(pipein_rx).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-            close(pipein2).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-            close(pipeout2).map_err(|e| io::Error::from(e.as_errno().unwrap()))?;
-            nix::unistd::setsid().unwrap(); // FIXME
+            // dup for drop CLOEXEC
+            let input_no_cloexec = dup(input).map_err(into_io_err)?;
+            let output_no_cloexec = dup(output).map_err(into_io_err)?;
+
+            // copy child process fd
+            dup2(input_no_cloexec, 3).map_err(into_io_err)?;
+            dup2(output_no_cloexec, 4).map_err(into_io_err)?;
+
+            close(input_no_cloexec).map_err(into_io_err)?;
+            close(output_no_cloexec).map_err(into_io_err)?;
+
+            // No need close because Input and output are flagged with CLOEXEC.
+
+            setsid().map_err(into_io_err)?;
             Ok(())
         });
     }
 
     let proc = command.spawn()?;
-    Ok((proc, OsPipe::new(pipein, pipeout)))
+    Ok((proc, OsPipe::new(their_input, their_output)))
 }
 
 pub fn spawn(builder: ProcessBuilder) -> io::Result<OsProcess> {
