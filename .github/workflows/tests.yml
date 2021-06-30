@@ -49,7 +49,7 @@ jobs:
       timeout-minutes: 5
       with:
         command: test
-        args: --no-fail-fast
+        args: --no-fail-fast --color=always
       env:
         RUST_LOG: trace
         RUST_BACKTRACE: '1'
