@@ -23,7 +23,8 @@ pub type OsProcess = Child;
 
 #[cfg(target_os = "macos")]
 pub fn find_browser(_browser: &crate::browser::BrowserType) -> Option<PathBuf> {
-    if let Ok(bin) = which("/Applications/Chromium.app/Contents/MacOS/Chromium") {
+    //if let Ok(bin) = which("/Applications/Chromium.app/Contents/MacOS/Chromium") {
+    if let Ok(bin) = which("/usr/local/bin/chromium") {
         return Some(bin);
     }
 
