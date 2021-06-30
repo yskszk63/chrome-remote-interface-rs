@@ -3,10 +3,17 @@ use chrome_remote_interface::Browser;
 
 mod common;
 
-#[tokio::main(flavor = "current_thread")]
-async fn main() -> anyhow::Result<()> {
+#[tokio::test]
+async fn twice() -> anyhow::Result<()> {
     common::pgrep_chromium();
+    proc().await?;
+    common::pgrep_chromium();
+    proc().await?;
+    common::pgrep_chromium();
+    Ok(())
+}
 
+async fn proc() -> anyhow::Result<()> {
     let browser = Browser::launcher()
         .headless(true) // headless mode (Default)
         .launch()
@@ -36,10 +43,7 @@ async fn main() -> anyhow::Result<()> {
             // ...
             drop(session);
 
-            anyhow::Result::<_>::Ok(())
+            Ok(())
         })
-        .await?;
-
-    common::pgrep_chromium();
-    Ok(())
+        .await
 }

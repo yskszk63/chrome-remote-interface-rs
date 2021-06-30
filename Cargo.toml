@@ -63,6 +63,7 @@ path = "model"
 anyhow = "1.0"
 tokio = { version = "1.0", features = ["rt", "macros"] }
 pretty_env_logger = "0.4"
+sysinfo = { version = "0.18.2", default-features = false }
 
 [features]
 default = []
