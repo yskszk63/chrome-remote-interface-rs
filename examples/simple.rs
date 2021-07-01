@@ -12,7 +12,7 @@ async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init();
 
     let browser = Browser::launcher()
-        .headless(false)
+        .headless(true)
         .output(true)
         .launch()
         .await?;

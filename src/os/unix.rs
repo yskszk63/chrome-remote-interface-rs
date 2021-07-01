@@ -52,11 +52,10 @@ fn into_io_err(err: nix::Error) -> io::Error {
 
 fn set_nonblocking(fd: RawFd) -> io::Result<()> {
     let flags = fcntl(fd, FcntlArg::F_GETFL).map_err(into_io_err)?;
-    fcntl(
-        fd,
-        FcntlArg::F_SETFL(OFlag::from_bits_truncate(flags) ^ OFlag::O_NONBLOCK),
-    )
-    .map_err(into_io_err)?;
+    let flags = OFlag::from_bits_truncate(flags);
+    if flags.contains(OFlag::O_NONBLOCK) {
+        fcntl(fd, FcntlArg::F_SETFL(flags ^ OFlag::O_NONBLOCK)).map_err(into_io_err)?;
+    }
     Ok(())
 }
 
@@ -71,32 +70,36 @@ pub async fn spawn_with_pipe(builder: ProcessBuilder) -> io::Result<(OsProcess, 
     let (input, their_input) = tokio_pipe::pipe()?;
     let (their_output, output) = tokio_pipe::pipe()?;
 
-    let input = input.as_raw_fd();
-    let output = output.as_raw_fd();
-    set_nonblocking(output)?;
-    set_nonblocking(output)?;
+    let proc = {
+        let input = input.as_raw_fd();
+        let output = output.as_raw_fd();
+        set_nonblocking(input)?;
+        set_nonblocking(output)?;
 
-    unsafe {
-        command.pre_exec(move || {
-            // dup for drop CLOEXEC
-            let input_no_cloexec = dup(input).map_err(into_io_err)?;
-            let output_no_cloexec = dup(output).map_err(into_io_err)?;
+        unsafe {
+            command.pre_exec(move || {
+                // dup for drop CLOEXEC
+                let input_no_cloexec = dup(input).map_err(into_io_err)?;
+                let output_no_cloexec = dup(output).map_err(into_io_err)?;
 
-            // copy child process fd
-            dup2(input_no_cloexec, 3).map_err(into_io_err)?;
-            dup2(output_no_cloexec, 4).map_err(into_io_err)?;
+                // copy child process fd
+                dup2(input_no_cloexec, 3).map_err(into_io_err)?;
+                dup2(output_no_cloexec, 4).map_err(into_io_err)?;
 
-            close(input_no_cloexec).map_err(into_io_err)?;
-            close(output_no_cloexec).map_err(into_io_err)?;
+                close(input_no_cloexec).map_err(into_io_err)?;
+                close(output_no_cloexec).map_err(into_io_err)?;
 
-            // No need close because Input and output are flagged with CLOEXEC.
+                // No need close because Input and output are flagged with CLOEXEC.
 
-            setsid().map_err(into_io_err)?;
-            Ok(())
-        });
-    }
+                setsid().map_err(into_io_err)?;
+                Ok(())
+            });
+        }
+        command.spawn()?
+    };
+    drop(input);
+    drop(output);
 
-    let proc = command.spawn()?;
     Ok((proc, OsPipe::new(their_input, their_output)))
 }
 
