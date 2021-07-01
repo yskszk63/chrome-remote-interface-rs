@@ -46,7 +46,7 @@ jobs:
 
     - name: Tests
       uses: actions-rs/cargo@v1
-      timeout-minutes: 5
+      timeout-minutes: 10
       with:
         command: test
         args: --no-fail-fast --color=always
