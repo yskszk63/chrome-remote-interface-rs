@@ -3,11 +3,11 @@ use std::os::unix::io::{AsRawFd, RawFd};
 use std::path::PathBuf;
 use std::process::Stdio;
 
-use nix::fcntl::{fcntl, FcntlArg, OFlag};
+use nix::fcntl::{fcntl, FcntlArg, FdFlag, OFlag};
 use nix::sys::signal::{kill, SIGTERM};
 use nix::sys::wait::waitpid;
 use nix::unistd::Pid;
-use nix::unistd::{close, dup, dup2, setsid};
+use nix::unistd::{dup2, setsid};
 use tokio::process::{Child, Command};
 use tokio_pipe::{PipeRead, PipeWrite};
 use which::which;
@@ -50,7 +50,7 @@ fn into_io_err(err: nix::Error) -> io::Error {
     }
 }
 
-fn set_nonblocking(fd: RawFd) -> io::Result<()> {
+fn set_blocking(fd: RawFd) -> io::Result<()> {
     let flags = fcntl(fd, FcntlArg::F_GETFL).map_err(into_io_err)?;
     let flags = OFlag::from_bits_truncate(flags);
     if flags.contains(OFlag::O_NONBLOCK) {
@@ -73,23 +73,33 @@ pub async fn spawn_with_pipe(builder: ProcessBuilder) -> io::Result<(OsProcess, 
     let proc = {
         let input = input.as_raw_fd();
         let output = output.as_raw_fd();
-        set_nonblocking(input)?;
-        set_nonblocking(output)?;
 
         unsafe {
             command.pre_exec(move || {
-                // dup for drop CLOEXEC
-                let input_no_cloexec = dup(input).map_err(into_io_err)?;
-                let output_no_cloexec = dup(output).map_err(into_io_err)?;
+                set_blocking(input)?;
+                set_blocking(output)?;
 
-                // copy child process fd
-                dup2(input_no_cloexec, 3).map_err(into_io_err)?;
-                dup2(output_no_cloexec, 4).map_err(into_io_err)?;
+                if input == 3 {
+                    let flags = fcntl(input, FcntlArg::F_GETFD).map_err(into_io_err)?;
+                    let flags = FdFlag::from_bits_truncate(flags);
+                    if flags.contains(FdFlag::FD_CLOEXEC) {
+                        fcntl(input, FcntlArg::F_SETFD(flags ^ FdFlag::FD_CLOEXEC))
+                            .map_err(into_io_err)?;
+                    }
+                } else {
+                    dup2(input, 3).map_err(into_io_err)?;
+                }
 
-                close(input_no_cloexec).map_err(into_io_err)?;
-                close(output_no_cloexec).map_err(into_io_err)?;
-
-                // No need close because Input and output are flagged with CLOEXEC.
+                if output == 4 {
+                    let flags = fcntl(output, FcntlArg::F_GETFD).map_err(into_io_err)?;
+                    let flags = FdFlag::from_bits_truncate(flags);
+                    if flags.contains(FdFlag::FD_CLOEXEC) {
+                        fcntl(output, FcntlArg::F_SETFD(flags ^ FdFlag::FD_CLOEXEC))
+                            .map_err(into_io_err)?;
+                    }
+                } else {
+                    dup2(output, 4).map_err(into_io_err)?;
+                }
 
                 setsid().map_err(into_io_err)?;
                 Ok(())
@@ -97,8 +107,6 @@ pub async fn spawn_with_pipe(builder: ProcessBuilder) -> io::Result<(OsProcess, 
         }
         command.spawn()?
     };
-    drop(input);
-    drop(output);
 
     Ok((proc, OsPipe::new(their_input, their_output)))
 }
