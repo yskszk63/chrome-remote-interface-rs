@@ -211,7 +211,7 @@ impl Launcher {
             "--use-mock-keychain",
         ]);
 
-        let (proc, remote_debugging) = if self.use_pipe.unwrap_or(crate::os::USE_PIPE_DEFAULT) {
+        let (proc, remote_debugging) = if self.use_pipe.unwrap_or(true) {
             command.arg("--remote-debugging-pipe");
             log::debug!("browser spawned {:?}", command);
             let (proc, ospipe) = command.spawn_with_pipe().await?;

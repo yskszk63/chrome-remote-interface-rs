@@ -2,7 +2,6 @@ use std::fs::File;
 use std::io;
 use std::mem;
 use std::os::raw::c_int;
-use std::os::windows::io::IntoRawHandle;
 use std::path::PathBuf;
 
 use which::which;
@@ -10,8 +9,6 @@ use winspawn::{move_fd, spawn as winspawn, Child, FileDescriptor, Mode};
 
 use crate::pipe::OsPipe;
 use crate::process::{ProcessBuilder, ProcessStdio};
-
-pub const USE_PIPE_DEFAULT: bool = true;
 
 pub type OsPipeWrite = tokio_anon_pipe::AnonPipeWrite;
 
@@ -30,8 +27,6 @@ pub fn find_browser(_browser: &crate::browser::BrowserType) -> Option<PathBuf> {
 pub async fn spawn_with_pipe(builder: ProcessBuilder) -> io::Result<(OsProcess, OsPipe)> {
     let (pipein_rx, pipein) = tokio_anon_pipe::anon_pipe().await?;
     let (pipeout, pipeout_tx) = tokio_anon_pipe::anon_pipe().await?;
-    let pipein_rx = pipein_rx.into_raw_handle();
-    let pipeout_tx = pipeout_tx.into_raw_handle();
 
     let pipein_rx = FileDescriptor::from_raw_handle(pipein_rx, Mode::ReadOnly)?;
     let pipeout_tx = FileDescriptor::from_raw_handle(pipeout_tx, Mode::WriteOnly)?;
@@ -66,8 +61,7 @@ where
     }
 
     let file = File::open("NUL")?;
-    let handle = file.into_raw_handle();
-    let stdiofd = FileDescriptor::from_raw_handle(handle, mode)?;
+    let stdiofd = FileDescriptor::from_raw_handle(file, mode)?;
     let result = move_fd(&stdiofd, fd, move |_| func());
     mem::forget(stdiofd);
     result
