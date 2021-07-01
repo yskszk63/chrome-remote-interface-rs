@@ -82,10 +82,6 @@ async fn main() -> anyhow::Result<()> {
                 .await?;
             println!("{:?}", response);
 
-            let mut events = session.events()?;
-            while let Some(event) = events.next().await {
-                println!("*** {:?}", event)
-            }
             Ok(())
         })
         .await

@@ -1,12 +1,9 @@
 use chrome_remote_interface::model::target::{AttachToTargetCommand, CreateTargetCommand};
 use chrome_remote_interface::Browser;
 
-mod common;
-
 #[tokio::test]
 async fn test_simple() -> anyhow::Result<()> {
     pretty_env_logger::init();
-    common::pgrep_chromium();
 
     let browser = Browser::launcher()
         .headless(true) // headless mode (Default)
@@ -41,6 +38,5 @@ async fn test_simple() -> anyhow::Result<()> {
         })
         .await?;
 
-    common::pgrep_chromium();
     Ok(())
 }
