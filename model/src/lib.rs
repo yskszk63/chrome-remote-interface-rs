@@ -1,5 +1,5 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![doc(html_root_url = "https://docs.rs/chrome-remote-interface-model/0.1.0-alpha.7")]
+#![doc(html_root_url = "https://docs.rs/chrome-remote-interface-model/0.1.0-alpha.8")]
 //! Chrome DevTools Protocol message model.
 //!
 //! ## License
