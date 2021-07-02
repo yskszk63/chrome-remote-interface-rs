@@ -305,15 +305,31 @@ impl CdpSession {
     }
 }
 
+async fn wait(browser: &Option<Arc<Mutex<Browser>>>) -> io::Result<()> {
+    if let Some(browser) = browser {
+        let mut browser = browser.lock().await;
+        browser.wait().await
+    } else {
+        std::future::pending::<()>().await;
+        Ok(())
+    }
+}
+
 async fn loop_inner(
     control_rx: &mut mpsc::UnboundedReceiver<Control>,
     channel: &mut Channel,
+    browser: Option<Arc<Mutex<Browser>>>,
 ) -> Result<()> {
     let mut waiters = HashMap::<u32, oneshot::Sender<std::result::Result<Value, Value>>>::new();
     let mut events = HashMap::<Option<SessionId>, Vec<mpsc::UnboundedSender<model::Event>>>::new();
 
     loop {
         select! {
+            _ = wait(&browser).fuse() => {
+                // FIXME There may be some events that we're not receiving.
+                break
+            },
+
             ctrl = control_rx.next() => {
                 match ctrl {
                     Some(Control::Subscribe(session_id, tx)) => {
@@ -368,7 +384,7 @@ async fn r#loop(
 ) -> Result<()> {
     log::debug!("Begin loop.");
 
-    let result = loop_inner(&mut control_rx, &mut channel).await;
+    let result = loop_inner(&mut control_rx, &mut channel, browser.clone()).await;
 
     if let Some(browser) = browser {
         log::debug!("send close command.");

@@ -78,3 +78,8 @@ pub fn proc_kill_sync(mut proc: OsProcess) {
 pub fn try_wait(proc: &mut OsProcess) -> io::Result<bool> {
     Ok(proc.try_wait()?.is_some())
 }
+
+pub async fn wait(proc: &mut OsProcess) -> io::Result<()> {
+    proc.await?;
+    Ok(())
+}

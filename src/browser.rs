@@ -337,6 +337,13 @@ impl Browser {
         }
         self.user_data_dir.take();
     }
+
+    pub async fn wait(&mut self) -> io::Result<()> {
+        if let Some(proc) = self.proc.as_mut() {
+            proc.wait().await?;
+        }
+        Ok(())
+    }
 }
 
 impl Drop for Browser {

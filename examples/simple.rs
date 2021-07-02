@@ -12,7 +12,7 @@ async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init();
 
     let browser = Browser::launcher()
-        .headless(true)
+        .headless(false)
         .output(true)
         .launch()
         .await?;
@@ -81,6 +81,11 @@ async fn main() -> anyhow::Result<()> {
                 .request(NavigateCommand::builder().url(dataurl).build().unwrap())
                 .await?;
             println!("{:?}", response);
+
+            let mut events = session.events()?;
+            while let Some(event) = events.next().await {
+                println!("** {:?}", event);
+            }
 
             Ok(())
         })

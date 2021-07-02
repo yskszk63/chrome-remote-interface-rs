@@ -138,4 +138,8 @@ impl Process {
     pub fn try_wait(&mut self) -> io::Result<bool> {
         os::try_wait(&mut self.0)
     }
+
+    pub async fn wait(&mut self) -> io::Result<()> {
+        os::wait(&mut self.0).await
+    }
 }
