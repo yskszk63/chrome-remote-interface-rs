@@ -111,16 +111,6 @@ pub async fn spawn_with_pipe(builder: ProcessBuilder) -> io::Result<(OsProcess, 
     Ok((proc, OsPipe::new(their_input, their_output)))
 }
 
-pub fn spawn(builder: ProcessBuilder) -> io::Result<OsProcess> {
-    let proc = Command::new(builder.get_program())
-        .args(builder.get_args())
-        .stdin(Stdio::from(builder.get_stdin()))
-        .stdout(Stdio::from(builder.get_stdout()))
-        .stderr(Stdio::from(builder.get_stderr()))
-        .spawn()?;
-    Ok(proc)
-}
-
 pub async fn proc_kill(mut proc: OsProcess) {
     if let Some(pid) = proc.id() {
         let pid = Pid::from_raw(pid as i32);
@@ -135,10 +125,6 @@ pub fn proc_kill_sync(proc: OsProcess) {
         kill(pid, Some(SIGTERM)).ok(); // FIXME
         waitpid(Some(pid), None).ok(); // FIXME blocking
     }
-}
-
-pub fn try_wait(proc: &mut OsProcess) -> io::Result<bool> {
-    Ok(proc.try_wait()?.is_some())
 }
 
 pub async fn wait(proc: &mut OsProcess) -> io::Result<()> {

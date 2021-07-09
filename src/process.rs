@@ -117,10 +117,6 @@ impl ProcessBuilder {
             .await
             .map(|(proc, pipe)| (Process(proc), pipe))
     }
-
-    pub fn spawn(self) -> io::Result<Process> {
-        os::spawn(self).map(Process)
-    }
 }
 
 #[derive(Debug)]
@@ -133,10 +129,6 @@ impl Process {
 
     pub fn kill_sync(self) {
         os::proc_kill_sync(self.0)
-    }
-
-    pub fn try_wait(&mut self) -> io::Result<bool> {
-        os::try_wait(&mut self.0)
     }
 
     pub async fn wait(&mut self) -> io::Result<()> {

@@ -1,14 +1,11 @@
 use std::env;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 use dirs::home_dir;
 use tempfile::TempDir;
-use tokio::fs::{create_dir_all, metadata, File};
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::time::sleep;
-use url::Url;
+use tokio::fs::{create_dir_all, metadata};
 use which::which;
 
 use crate::process::{Process, ProcessBuilder, ProcessStdio};
@@ -19,18 +16,6 @@ pub enum BrowserError {
     /// IO error.
     #[error(transparent)]
     Io(#[from] io::Error),
-
-    /// Cannot detect url for Chrome DevTools Protocol URL.
-    #[error("cannot detect url.")]
-    CannotDetectUrl,
-
-    /// Unexpected format for DevToolsActivePort.
-    #[error("unexpected format.")]
-    UnexpectedFormat,
-
-    /// Failed to parse URL.
-    #[error(transparent)]
-    UrlParse(#[from] url::ParseError),
 
     /// Browser not found.
     #[error("browser not found.")]
@@ -69,12 +54,6 @@ pub enum BrowserType {
     Chromium,
 }
 
-#[derive(Debug)]
-enum RemoteDebugging {
-    Pipe(Option<crate::pipe::OsPipe>),
-    Ws,
-}
-
 fn which_browser(browser: &BrowserType) -> Option<PathBuf> {
     if let Ok(val) = env::var(crate::BROWSER_BIN) {
         return which(val).ok();
@@ -88,7 +67,6 @@ pub struct Launcher {
     browser_type: Option<BrowserType>,
     user_data_dir: Option<UserDataDir>,
     headless: Option<bool>,
-    use_pipe: Option<bool>,
     output: Option<bool>,
 }
 
@@ -114,13 +92,6 @@ impl Launcher {
     /// Specify headless mode or not. (Default: headless)
     pub fn headless(&mut self, value: bool) -> &mut Self {
         self.headless = Some(value);
-        self
-    }
-
-    /// Specify protocol transport using pipe or not (websocket). (Default: Windows/Mac: false,
-    /// Other: true)
-    pub fn use_pipe(&mut self, value: bool) -> &mut Self {
-        self.use_pipe = Some(value);
         self
     }
 
@@ -167,6 +138,7 @@ impl Launcher {
                 .stderr(ProcessStdio::null());
         }
 
+        command.arg("--remote-debugging-pipe");
         if headless {
             command.args(&["--headless", "--disable-gpu"]);
         }
@@ -209,24 +181,15 @@ impl Launcher {
             "--use-mock-keychain",
         ]);
 
-        let (proc, remote_debugging) = if self.use_pipe.unwrap_or(true) {
-            command.arg("--remote-debugging-pipe");
-            log::debug!("browser spawned {:?}", command);
-            let (proc, ospipe) = command.spawn_with_pipe().await?;
-            (proc, RemoteDebugging::Pipe(Some(ospipe)))
-        } else {
-            command.arg("--remote-debugging-port=0");
-            log::debug!("browser spawned {:?}", command);
-            let proc = command.spawn()?;
-            (proc, RemoteDebugging::Ws)
-        };
+        log::debug!("browser spawn {:?}", command);
+        let (proc, ospipe) = command.spawn_with_pipe().await?;
 
         Ok(Browser {
             when: now,
             proc: Some(proc),
             browser_type,
             user_data_dir: Some(user_data_dir),
-            remote_debugging,
+            pipe: Some(ospipe),
         })
     }
 }
@@ -240,7 +203,7 @@ pub struct Browser {
     proc: Option<Process>,
     browser_type: BrowserType,
     user_data_dir: Option<UserDataDir>,
-    remote_debugging: RemoteDebugging,
+    pipe: Option<crate::pipe::OsPipe>,
 }
 
 impl Browser {
@@ -249,68 +212,12 @@ impl Browser {
         Default::default()
     }
 
-    fn user_data_dir(&self) -> PathBuf {
-        match self.user_data_dir.as_ref().expect("already closed.") {
-            UserDataDir::Generated(path) => path.as_ref().to_path_buf(),
-            UserDataDir::Specified(path) => path.to_path_buf(),
-            UserDataDir::Default => {
-                // https://chromium.googlesource.com/chromium/src/+/master/docs/user_data_dir.md
-                todo!()
-            }
-        }
-    }
-
-    pub(crate) async fn cdp_url(&mut self) -> Result<Url> {
-        let f = self.user_data_dir().join("DevToolsActivePort");
-
-        let interval = Duration::from_millis(200);
-        for n in 0..50usize {
-            match File::open(&f).await {
-                Ok(f) => {
-                    let metadata = f.metadata().await?;
-                    if metadata.modified()? >= self.when {
-                        let mut f = BufReader::new(f).lines();
-                        let maybe_port = f.next_line().await?;
-                        let maybe_path = f.next_line().await?;
-                        let maybe_eof = f.next_line().await?;
-                        if let (Some(port), Some(path), None) = (maybe_port, maybe_path, maybe_eof)
-                        {
-                            return Ok(Url::parse(&format!("ws://127.0.0.1:{}{}", port, path))?);
-                        } else {
-                            return Err(BrowserError::UnexpectedFormat);
-                        }
-                    }
-                }
-                Err(e) if e.kind() == io::ErrorKind::NotFound => {
-                    if self.proc.as_mut().unwrap().try_wait()? {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "process may be terminated.",
-                        )
-                        .into());
-                    }
-                    log::trace!("{}: {:?} not found. wait {}.", n, f, interval.as_millis());
-                }
-                Err(e) => return Err(e.into()),
-            }
-            sleep(interval).await;
-        }
-
-        Err(BrowserError::CannotDetectUrl)
-    }
-
     /// Connect Chrome DevTools Protocol Client.
     ///
     /// This instance Ownership move to Client.
-    pub async fn connect(mut self) -> super::Result<super::CdpClient> {
-        let maybe_channel = match &mut self.remote_debugging {
-            RemoteDebugging::Ws => None,
-            RemoteDebugging::Pipe(inner) => Some(inner.take().unwrap().into()),
-        };
-        match maybe_channel {
-            None => super::CdpClient::connect_ws(&self.cdp_url().await?, Some(self)).await,
-            Some(channel) => Ok(super::CdpClient::connect_pipe(self, channel)),
-        }
+    pub fn connect(mut self) -> super::CdpClient {
+        let channel = self.pipe.take().unwrap().into();
+        super::CdpClient::connect_pipe(self, channel)
     }
 }
 

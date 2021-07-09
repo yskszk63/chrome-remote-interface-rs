@@ -5,7 +5,7 @@ async fn connect_default() -> anyhow::Result<()> {
     pretty_env_logger::init();
 
     let browser = Browser::launcher().output(true).launch().await?;
-    let client = browser.connect().await?;
+    let client = browser.connect();
     drop(client);
     Ok(())
 }

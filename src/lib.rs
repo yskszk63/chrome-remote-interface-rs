@@ -17,7 +17,7 @@
 //!         .launch()
 //!         .await?;
 //!
-//!     let client = browser.connect().await?;
+//!     let client = browser.connect();
 //!     // Open new page
 //!     let response = client.request(CreateTargetCommand::builder()
 //!         .url("https://example.org/".into())
