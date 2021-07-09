@@ -17,31 +17,27 @@ async fn proc() -> anyhow::Result<()> {
         .launch()
         .await?;
 
-    browser
-        .run_with(|mut client| async move {
-            // Open new page
-            let response = client
-                .request(
-                    CreateTargetCommand::builder()
-                        .url("https://example.org/".into())
-                        .build()
-                        .unwrap(),
-                )
-                .await?;
+    let client = browser.connect().await?;
+    // Open new page
+    let response = client
+        .request(
+            CreateTargetCommand::builder()
+                .url("https://example.org/".into())
+                .build()
+                .unwrap(),
+        )
+        .await?;
 
-            // Attach opened page.
-            let response = client
-                .request(AttachToTargetCommand::new((*response).clone(), Some(true)))
-                .await?;
+    // Attach opened page.
+    let response = client
+        .request(AttachToTargetCommand::new((*response).clone(), Some(true)))
+        .await?;
 
-            // construct attached session.
-            let session = client.session(response);
+    // construct attached session.
+    let session = client.session(response);
 
-            // DO STUFF
-            // ...
-            drop(session);
-
-            Ok(())
-        })
-        .await
+    // DO STUFF
+    // ...
+    drop(session);
+    Ok(())
 }

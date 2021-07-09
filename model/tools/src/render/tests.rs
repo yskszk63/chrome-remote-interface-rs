@@ -64,6 +64,7 @@ fn test_protocol() {
             #![allow(clippy::many_single_char_names)]
             #![allow(clippy::new_without_default)]
             #![allow(clippy::wrong_self_convention)]
+            #![warn(rustdoc::bare_urls)]
             use std::iter::{IntoIterator, FromIterator};
             use std::ops::Deref;
             use serde::{Serialize, Deserialize};

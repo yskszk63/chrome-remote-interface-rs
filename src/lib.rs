@@ -17,27 +17,26 @@
 //!         .launch()
 //!         .await?;
 //!
-//!     browser.run_with(|mut client| async move {
-//!         // Open new page
-//!         let response = client.request(CreateTargetCommand::builder()
-//!             .url("https://example.org/".into())
-//!             .build()
-//!             .unwrap()
-//!         ).await?;
+//!     let client = browser.connect().await?;
+//!     // Open new page
+//!     let response = client.request(CreateTargetCommand::builder()
+//!         .url("https://example.org/".into())
+//!         .build()
+//!         .unwrap()
+//!     ).await?;
 //!
-//!         // Attach opened page.
-//!         let response = client
-//!             .request(AttachToTargetCommand::new((*response).clone(), Some(true)))
-//!             .await?;
+//!     // Attach opened page.
+//!     let response = client
+//!         .request(AttachToTargetCommand::new((*response).clone(), Some(true)))
+//!         .await?;
 //!
-//!         // construct attached session.
-//!         let mut session = client.session(response);
+//!     // construct attached session.
+//!     let mut session = client.session(response);
 //!
-//!         // DO STUFF
-//!         // ...
+//!     // DO STUFF
+//!     // ...
 //!
-//!         Ok(())
-//!     }).await
+//!     Ok(())
 //! }
 //! ```
 //!
@@ -45,9 +44,9 @@
 //!
 //! Licensed under either of
 //! * Apache License, Version 2.0
-//!   ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+//!   ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
 //! * MIT license
-//!   ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+//!   ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
 //! at your option.
 //!
 //! ## Contribution
@@ -56,30 +55,17 @@
 //! for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 //! dual licensed as above, without any additional terms or conditions.!
 
-use std::collections::HashMap;
-use std::future::Future;
 use std::io;
-use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures::channel::mpsc;
-use futures::channel::oneshot;
-use futures::future::FutureExt;
 use futures::ready;
-use futures::select;
 use futures::sink::{Sink, SinkExt};
 use futures::stream::{Fuse, Stream, StreamExt};
-use serde::Deserialize;
 use serde_json::Value;
 use tokio::net::TcpStream;
-use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::protocol::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
-use url::Url;
 
 pub use browser::*;
 pub use chrome_remote_interface_model as model;
@@ -87,6 +73,8 @@ use model::SessionId;
 
 /// Environment variable key for Browser Path.
 pub const BROWSER_BIN: &str = "CRI_CHROME_BIN";
+
+pub use client::{Client as CdpClient, Events as CdpEvents, Session as CdpSession};
 
 macro_rules! recv {
     ($len:expr, $content:expr) => {
@@ -101,6 +89,7 @@ macro_rules! send {
 }
 
 mod browser;
+mod client;
 pub(crate) mod os;
 mod pipe;
 pub(crate) mod process;
@@ -124,23 +113,13 @@ pub enum Error {
     #[error("error response {0:?}")]
     Response(serde_json::Value),
 
-    /// Loop Cancelation Error.
-    #[error("loop canceled")]
-    LoopCanceled(#[from] oneshot::Canceled),
-
-    /// Maybe Loop Aborted Error.
-    #[error("loop aborted")]
-    LoopAborted(#[from] mpsc::SendError),
-
     /// Browser Error.
     #[error(transparent)]
     Browser(#[from] BrowserError),
-}
 
-impl<T> From<mpsc::TrySendError<T>> for Error {
-    fn from(v: mpsc::TrySendError<T>) -> Self {
-        Self::LoopAborted(v.into_send_error())
-    }
+    /// Browser Error.
+    #[error("transport broken: {0}")]
+    TransportBroken(String),
 }
 
 /// Chrome DevTools Protocol Result.
@@ -223,277 +202,5 @@ impl Sink<Value> for Channel {
 
             Self::Pipe(inner) => inner.poll_close_unpin(cx),
         }
-    }
-}
-
-/// Stream for Chrome DevTools Protocol Event.
-#[derive(Debug)]
-pub struct CdpEvents {
-    rx: mpsc::UnboundedReceiver<model::Event>,
-}
-
-impl Stream for CdpEvents {
-    type Item = model::Event;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.rx.poll_next_unpin(cx)
-    }
-}
-
-/// Chrome DevTools Protocol Client Command Request Future.
-#[derive(Debug)]
-pub struct Request<R> {
-    tx_result: Option<Result<()>>,
-    rx: oneshot::Receiver<std::result::Result<Value, Value>>,
-    _phantom: PhantomData<R>,
-}
-
-impl<R> Future for Request<R>
-where
-    R: for<'r> Deserialize<'r> + Unpin,
-{
-    type Output = Result<R>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.get_mut();
-        if let Some(r) = this.tx_result.take() {
-            r?;
-        }
-        match ready!(this.rx.poll_unpin(cx))? {
-            Ok(v) => Poll::Ready(Ok(serde_json::from_value(v)?)),
-            Err(err) => Poll::Ready(Err(Error::Response(err))),
-        }
-    }
-}
-
-/// Chrome DevTools Protocol Session.
-#[derive(Debug, Clone)]
-pub struct CdpSession {
-    idgen: Arc<AtomicU32>,
-    session_id: Option<SessionId>,
-    control_tx: mpsc::UnboundedSender<Control>,
-    browser: Option<Arc<Mutex<Browser>>>,
-}
-
-impl CdpSession {
-    /// Request for Chrome DevTools Protocol Command.
-    pub fn request<C>(&mut self, command: C) -> Request<C::Return>
-    where
-        C: model::Command,
-    {
-        let id = self.idgen.fetch_add(1, Ordering::SeqCst);
-        let request = command.into_request(self.session_id.clone(), id);
-        let request = serde_json::to_value(&request).unwrap(); // FIXME
-        let (tx, rx) = oneshot::channel();
-        let tx_result = self
-            .control_tx
-            .unbounded_send(Control::Request(id, request, tx));
-
-        Request {
-            tx_result: Some(tx_result.map_err(Into::into)),
-            rx,
-            _phantom: PhantomData,
-        }
-    }
-
-    /// Subscribe Chrome DevTools Protocol Event.
-    pub fn events(&mut self) -> Result<CdpEvents> {
-        let (tx, rx) = mpsc::unbounded();
-        self.control_tx
-            .unbounded_send(Control::Subscribe(self.session_id.clone(), tx))?;
-        Ok(CdpEvents { rx })
-    }
-}
-
-async fn wait(browser: &Option<Arc<Mutex<Browser>>>) -> io::Result<()> {
-    if let Some(browser) = browser {
-        let mut browser = browser.lock().await;
-        browser.wait().await
-    } else {
-        std::future::pending::<()>().await;
-        Ok(())
-    }
-}
-
-async fn loop_inner(
-    control_rx: &mut mpsc::UnboundedReceiver<Control>,
-    channel: &mut Channel,
-    browser: Option<Arc<Mutex<Browser>>>,
-) -> Result<()> {
-    let mut waiters = HashMap::<u32, oneshot::Sender<std::result::Result<Value, Value>>>::new();
-    let mut events = HashMap::<Option<SessionId>, Vec<mpsc::UnboundedSender<model::Event>>>::new();
-
-    loop {
-        select! {
-            _ = wait(&browser).fuse() => {
-                // FIXME There may be some events that we're not receiving.
-                break
-            },
-
-            ctrl = control_rx.next() => {
-                match ctrl {
-                    Some(Control::Subscribe(session_id, tx)) => {
-                        events.entry(session_id).or_insert_with(Default::default).push(tx);
-                    }
-                    Some(Control::Request(id, request, result)) => {
-                        channel.send(request).await?;
-                        waiters.insert(id, result);
-                    }
-                    None => break,
-                }
-            },
-
-            msg = channel.next().fuse() => {
-                match msg {
-                    Some(Ok(msg)) => {
-                        let msg = serde_json::from_value(msg)?;
-                        match msg {
-                            model::Response::Event(session_id, evt) => {
-                                for tx in &mut *events.entry(session_id).or_default() {
-                                    tx.unbounded_send(evt.clone()).ok(); // TODO remove
-                                }
-                            }
-
-                            model::Response::Return(_, id, v) => {
-                                if let Some(tx) = waiters.remove(&id) {
-                                    tx.send(Ok(v)).unwrap();
-                                }
-                            }
-
-                            model::Response::Error(_, id, err) => {
-                                if let Some(tx) = waiters.remove(&id) {
-                                    tx.send(Err(err)).unwrap();
-                                }
-                            }
-                        }
-                    }
-                    Some(Err(err)) => return Err(err),
-                    None => {}
-                }
-            }
-        }
-    }
-
-    Ok(())
-}
-
-async fn r#loop(
-    mut control_rx: mpsc::UnboundedReceiver<Control>,
-    mut channel: Channel,
-    browser: Option<Arc<Mutex<Browser>>>,
-) -> Result<()> {
-    log::debug!("Begin loop.");
-
-    let result = loop_inner(&mut control_rx, &mut channel, browser.clone()).await;
-
-    if let Some(browser) = browser {
-        log::debug!("send close command.");
-        let close_command = model::browser::CloseCommand::new();
-        let close_command = model::Command::into_request(close_command, None, 0);
-        if let Ok(close_command) = serde_json::to_value(close_command) {
-            channel.send(close_command).await.ok();
-        }
-
-        log::debug!("browser shutdown.");
-        browser.lock().await.close().await;
-    }
-    log::debug!("Loop done.");
-
-    result
-}
-
-#[derive(Debug)]
-enum Control {
-    Subscribe(Option<SessionId>, mpsc::UnboundedSender<model::Event>),
-    Request(
-        u32,
-        Value,
-        oneshot::Sender<std::result::Result<Value, Value>>,
-    ),
-}
-
-/// Message loop.
-pub struct Loop {
-    future: Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
-}
-
-impl Future for Loop {
-    type Output = Result<()>;
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.future.poll_unpin(cx)
-    }
-}
-
-/// Chrome DevTools Protocol Client.
-///
-/// This serve as browser session.
-#[derive(Debug)]
-pub struct CdpClient {
-    control_tx: mpsc::UnboundedSender<Control>,
-    session: CdpSession,
-}
-
-impl CdpClient {
-    async fn connect_internal(channel: Channel, browser: Option<Browser>) -> (Self, Loop) {
-        let browser = browser.map(|b| Arc::new(Mutex::new(b)));
-
-        let (control_tx, control_rx) = mpsc::unbounded();
-        let task = Loop {
-            future: Box::pin(r#loop(control_rx, channel, browser.clone())),
-        };
-        let session = CdpSession {
-            idgen: Arc::new(AtomicU32::default()),
-            session_id: None,
-            control_tx: control_tx.clone(),
-            browser,
-        };
-        let client = CdpClient {
-            control_tx,
-            session,
-        };
-        (client, task)
-    }
-
-    /// Connect with CDP Websocket.
-    pub async fn connect(url: &Url) -> Result<(Self, impl Future<Output = Result<()>>)> {
-        Self::connect_ws(url, None).await
-    }
-
-    async fn connect_ws(url: &Url, browser: Option<Browser>) -> Result<(Self, Loop)> {
-        let (ws, _) = tokio_tungstenite::connect_async(url).await?;
-        let channel = Channel::Ws(ws.fuse());
-        Ok(Self::connect_internal(channel, browser).await)
-    }
-
-    async fn connect_pipe(browser: Browser, channel: pipe::PipeChannel) -> Result<(Self, Loop)> {
-        let channel = Channel::Pipe(channel);
-        Ok(Self::connect_internal(channel, Some(browser)).await)
-    }
-
-    /// Construct session with target.
-    pub fn session<S: Deref<Target = model::target::SessionId>>(
-        &mut self,
-        session_id: S,
-    ) -> CdpSession {
-        let session_id = Some(SessionId::from(session_id.as_ref()));
-        CdpSession {
-            idgen: self.idgen.clone(),
-            session_id,
-            control_tx: self.control_tx.clone(),
-            browser: self.browser.clone(),
-        }
-    }
-}
-
-impl Deref for CdpClient {
-    type Target = CdpSession;
-    fn deref(&self) -> &Self::Target {
-        &self.session
-    }
-}
-
-impl DerefMut for CdpClient {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.session
     }
 }
