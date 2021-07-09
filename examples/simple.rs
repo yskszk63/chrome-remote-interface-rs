@@ -15,7 +15,7 @@ async fn main() -> anyhow::Result<()> {
         .output(true)
         .launch()
         .await?;
-    let client = browser.connect().await?;
+    let client = browser.connect();
 
     let mut events = client.events().await;
     tokio::spawn(async move {

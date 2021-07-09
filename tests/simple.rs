@@ -9,7 +9,7 @@ async fn test_simple() -> anyhow::Result<()> {
         .headless(true) // headless mode (Default)
         .launch()
         .await?;
-    let client = browser.connect().await?;
+    let client = browser.connect();
 
     // Open new page
     let response = client

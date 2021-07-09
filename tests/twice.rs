@@ -17,7 +17,7 @@ async fn proc() -> anyhow::Result<()> {
         .launch()
         .await?;
 
-    let client = browser.connect().await?;
+    let client = browser.connect();
     // Open new page
     let response = client
         .request(

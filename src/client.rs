@@ -323,10 +323,10 @@ pub struct Client {
 
 impl Client {
     /// Connect with CDP Websocket.
-    pub async fn connect_ws(url: &Url, browser: Option<super::Browser>) -> super::Result<Self> {
+    pub async fn connect_ws(url: &Url) -> super::Result<Self> {
         let (ws, _) = tokio_tungstenite::connect_async(url).await?;
         let channel = super::Channel::Ws(ws.fuse());
-        let session = Session::new(channel, browser);
+        let session = Session::new(channel, None);
         Ok(Self { session })
     }
 

@@ -38,10 +38,6 @@ pub async fn spawn_with_pipe(builder: ProcessBuilder) -> io::Result<(OsProcess, 
     Ok((child, OsPipe::new(pipein, pipeout)))
 }
 
-pub fn spawn(builder: ProcessBuilder) -> io::Result<OsProcess> {
-    spawn_local(&builder)
-}
-
 fn spawn_local(builder: &ProcessBuilder) -> io::Result<OsProcess> {
     with_stdio(builder.get_stdin(), Mode::ReadOnly, 0, move || {
         with_stdio(builder.get_stdout(), Mode::WriteOnly, 1, move || {
@@ -73,10 +69,6 @@ pub async fn proc_kill(mut proc: OsProcess) {
 
 pub fn proc_kill_sync(mut proc: OsProcess) {
     proc.kill().ok();
-}
-
-pub fn try_wait(proc: &mut OsProcess) -> io::Result<bool> {
-    Ok(proc.try_wait()?.is_some())
 }
 
 pub async fn wait(proc: &mut OsProcess) -> io::Result<()> {
