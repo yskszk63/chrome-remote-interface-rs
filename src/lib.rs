@@ -74,7 +74,7 @@ use model::SessionId;
 /// Environment variable key for Browser Path.
 pub const BROWSER_BIN: &str = "CRI_CHROME_BIN";
 
-pub use client::{Client, Session};
+pub use client::{Client as CdpClient, Events as CdpEvents, Session as CdpSession};
 
 macro_rules! recv {
     ($len:expr, $content:expr) => {

@@ -211,19 +211,26 @@ pub struct Events {
     rx: mpsc::UnboundedReceiver<model::Event>,
 }
 
-impl Events {
-    pub async fn next(&mut self) -> Option<model::Event> {
+impl Stream for Events {
+    type Item = model::Event;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let Self { receive, rx } = self.get_mut();
         loop {
-            match self.rx.try_next() {
-                Ok(Some(evt)) => return Some(evt),
-                Ok(None) => return None,
-                Err(..) => {}
+            match rx.poll_next_unpin(cx) {
+                Poll::Ready(result) => return Poll::Ready(result),
+                Poll::Pending => {}
             }
-            self.receive.next().await?;
+
+            match receive.next().poll_unpin(cx) {
+                Poll::Ready(..) => {}
+                Poll::Pending => return Poll::Pending,
+            }
         }
     }
 }
 
+/// Chrome DevTools Protocol Session.
 pub struct Session {
     idgen: Arc<AtomicU32>,
     session_id: Option<model::SessionId>,
@@ -299,6 +306,7 @@ impl Session {
         Self::request_inner(command, tx, rx, session_id, id)
     }
 
+    /// Subscribe Chrome DevTools Protocol Event.
     pub async fn events(&self) -> Events {
         let rx = self.rx.subscribe(self.session_id.clone()).await;
         Events {
@@ -308,11 +316,13 @@ impl Session {
     }
 }
 
+/// Chrome DevTools Protocol Client.
 pub struct Client {
     session: Session,
 }
 
 impl Client {
+    /// Connect with CDP Websocket.
     pub async fn connect_ws(url: &Url, browser: Option<super::Browser>) -> super::Result<Self> {
         let (ws, _) = tokio_tungstenite::connect_async(url).await?;
         let channel = super::Channel::Ws(ws.fuse());
@@ -326,6 +336,7 @@ impl Client {
         Self { session }
     }
 
+    /// Construct session with target.
     pub fn session<S>(&self, session_id: S) -> Session
     where
         S: Deref<Target = model::target::SessionId>,

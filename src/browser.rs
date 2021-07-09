@@ -302,14 +302,14 @@ impl Browser {
     /// Connect Chrome DevTools Protocol Client.
     ///
     /// This instance Ownership move to Client.
-    pub async fn connect(mut self) -> super::Result<super::Client> {
+    pub async fn connect(mut self) -> super::Result<super::CdpClient> {
         let maybe_channel = match &mut self.remote_debugging {
             RemoteDebugging::Ws => None,
             RemoteDebugging::Pipe(inner) => Some(inner.take().unwrap().into()),
         };
         match maybe_channel {
-            None => super::Client::connect_ws(&self.cdp_url().await?, Some(self)).await,
-            Some(channel) => Ok(super::Client::connect_pipe(self, channel)),
+            None => super::CdpClient::connect_ws(&self.cdp_url().await?, Some(self)).await,
+            Some(channel) => Ok(super::CdpClient::connect_pipe(self, channel)),
         }
     }
 }

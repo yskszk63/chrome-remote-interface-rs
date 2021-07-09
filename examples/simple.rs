@@ -1,8 +1,9 @@
+use futures::stream::StreamExt;
+
 use chrome_remote_interface::model::page::{self, CaptureScreenshotCommand, NavigateCommand};
 use chrome_remote_interface::model::runtime::EvaluateCommand;
 use chrome_remote_interface::model::target::{AttachToTargetCommand, CreateTargetCommand};
 use chrome_remote_interface::model::Event;
-
 use chrome_remote_interface::Browser;
 
 #[tokio::main(flavor = "current_thread")]
