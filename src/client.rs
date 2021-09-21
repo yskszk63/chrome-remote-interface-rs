@@ -114,15 +114,15 @@ where
             Poll::Pending => return Poll::Pending,
         };
 
-        let result = match inner.stream.poll_next_unpin(cx) {
-            Poll::Pending => return Poll::Pending,
-            Poll::Ready(result) => result,
-        };
-
         if inner.head.is_some() {
             inner.wakers.push(cx.waker().clone());
             return Poll::Pending;
         }
+
+        let result = match inner.stream.poll_next_unpin(cx) {
+            Poll::Pending => return Poll::Pending,
+            Poll::Ready(result) => result,
+        };
 
         for w in inner.wakers.drain(..) {
             w.wake();

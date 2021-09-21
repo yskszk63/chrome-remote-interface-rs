@@ -17,7 +17,7 @@ futures = "0.3"
 log = "0.4"
 tempfile = "3.2"
 bytes = "1.0"
-dirs = "3.0"
+dirs = "4.0"
 which = "4.1"
 
 [target.'cfg(unix)'.dependencies]
@@ -35,7 +35,7 @@ features = [
 ]
 
 [dependencies.tokio]
-version = "1.0"
+version = "1.11"
 features = [
     "fs",
     "time",
@@ -44,7 +44,7 @@ features = [
 ]
 
 [dependencies.tokio-tungstenite]
-version = "0.14"
+version = "0.15"
 features = [
     "default",
 ]
@@ -61,7 +61,7 @@ path = "model"
 
 [dev-dependencies]
 anyhow = "1.0"
-tokio = { version = "1.0", features = ["rt", "macros", "net"] }
+tokio = { version = "1.11", features = ["rt", "macros", "net"] }
 pretty_env_logger = "0.4"
 
 [features]
